@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record model="pdb.launcher" id="default_pdb">
+            <field name="name">default</field>
+            <field name="module">pdb</field>
+        </record>
+    </data>
+</odoo>
+    
