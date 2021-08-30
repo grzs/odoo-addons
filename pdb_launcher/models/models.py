@@ -57,7 +57,7 @@ class PdbLauncher(models.Model):
                 try:
                     import pudb
                     pudb.set_trace()
-                except ImportError:
+                except ModuleNotFoundError:
                     raise(UserError(
                         "PuDB is not installed!"))
         else:
@@ -93,10 +93,7 @@ class PdbBreakpoint(models.Model):
             else:
                 cmd = 'b'
 
-            module_path = eval(
-                'addons.' + record.module.name + '.__path__')[0]
+            module_path = eval(f'addons.{record.module.name}.__path__')[0]
             breakpoints.append(
-                '{} {}/{}:{}\n'.format(
-                    cmd, module_path, record.filename, record.line_nr)
-            )
+                f'{cmd} {module_path}/{record.filename}:{record.line_nr}\n')
         return breakpoints

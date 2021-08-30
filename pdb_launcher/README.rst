@@ -6,7 +6,7 @@ Summary
 =======
 
 The purpose of this module is to provide an entrypoint for
-`pdb <https://docs.python.org/3.5/library/pdb.html>`_ (or other) python debugger module.
+`pdb <https://docs.python.org/3.9/library/pdb.html>`_ (or other) python debugger module.
 It is useful when hard coding breakpoints is not an option. The list of saved
 launcher setups is accessable from the technical menu. Debugger can be started by pressing a button
 on the launcher form.
