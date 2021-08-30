@@ -76,10 +76,7 @@ class PdbBreakpoint(models.Model):
             else:
                 cmd = 'b'
 
-            module_path = eval(
-                'addons.' + record.module._module + '.__path__')[0]
+            module_path = eval(f'addons.{record.module._module}.__path__')[0]
             breakpoints.append(
-                '{} {}/{}:{}\n'.format(
-                    cmd, module_path, record.filename, record.line_nr)
-            )
+                f'{cmd} {module_path}/{record.filename}:{record.line_nr}\n')
         return breakpoints
