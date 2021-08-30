@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 
+from sys import version_info
 import os
 from odoo import models, fields, api, addons
+from odoo.exceptions import UserError
 
 
 class PdbLauncher(models.Model):
@@ -11,7 +13,7 @@ class PdbLauncher(models.Model):
     name = fields.Char()
     module = fields.Selection(
         string="Debugger Python module",
-        selection=[('pdb', 'Pdb')],
+        selection=[('pdb', 'Pdb'), ('pudb', 'PuDB')],
         default='pdb',
         required=True)
     description = fields.Text()
@@ -25,6 +27,14 @@ class PdbLauncher(models.Model):
             if breakpoint_lines:
                 if record.module == 'pdb':
                     rcfile = os.path.expanduser('~/.pdbrc')
+                elif record.module == 'pudb':
+                    confdir = os.path.join(
+                        os.environ['HOME'], '.config', 'pudb')
+                    if not os.path.isdir(confdir):
+                        os.makedirs(confdir, exist_ok=True)
+                    rcfile = os.path.join(
+                        confdir, 'saved-breakpoints-{}.{}'.format(
+                            version_info.major, version_info.minor))
                 else:
                     return False
 
@@ -43,6 +53,13 @@ class PdbLauncher(models.Model):
             if record.module == 'pdb':
                 import pdb
                 pdb.set_trace()
+            elif record.module == 'pudb':
+                try:
+                    import pudb
+                    pudb.set_trace()
+                except ImportError:
+                    raise(UserError(
+                        "PuDB is not installed!"))
         else:
             return False
 
@@ -77,7 +94,7 @@ class PdbBreakpoint(models.Model):
                 cmd = 'b'
 
             module_path = eval(
-                'addons.' + record.module._module + '.__path__')[0]
+                'addons.' + record.module.name + '.__path__')[0]
             breakpoints.append(
                 '{} {}/{}:{}\n'.format(
                     cmd, module_path, record.filename, record.line_nr)

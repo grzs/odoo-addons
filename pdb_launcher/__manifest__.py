@@ -14,7 +14,7 @@
     'website': "https://github.com/grzs/odoo-addons/tree/12.0/pdb_launcher",
     'license': 'LGPL-3',
     'category': 'Technical',
-    'version': '0.2',
+    'version': '0.5',
     'depends': ['base'],
     'data': [
         'security/ir.model.access.csv',
