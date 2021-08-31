@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
+        <!-- server action to launch chosen debugger -->
+        <record model="ir.actions.server" id="pdb_launcher.launch">
+            <field name="name">Launch Python Debugger</field>
+            <field name="model_id" ref="model_pdb_launcher"/>
+            <field name="state">code</field>
+            <field name="code">
+                record.launch()
+            </field>
+        </record>
+
         <!-- explicit list view definition -->
         <record model="ir.ui.view" id="pdb_launcher.list">
             <field name="name">Pdb Launcher list</field>
@@ -53,16 +63,6 @@
                         </field>
                     </sheet>
                 </form>
-            </field>
-        </record>
-
-        <!-- server action to launch chosen debugger -->
-        <record model="ir.actions.server" id="pdb_launcher.launch">
-            <field name="name">Launch Python Debugger</field>
-            <field name="model_id" ref="model_pdb_launcher"/>
-            <field name="state">code</field>
-            <field name="code">
-                record.launch()
             </field>
         </record>
 
