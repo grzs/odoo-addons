@@ -10,8 +10,8 @@ from jaeger_client import Config
 # logging.basicConfig(format='%(message)s', level=logging.DEBUG)
 
 # jaeger config file paths
-config_dir = path.expanduser('~/.config')
-config_yaml_path = path.join(config_dir, 'jaeger.yaml')
+_config_dir = path.expanduser('~/.config')
+_config_yaml_path = path.join(_config_dir, 'jaeger.yaml')
 
 default_config = {
     'config': {
@@ -34,18 +34,18 @@ def save_config(config):
     assert 'param' in config['config']['sampler'].keys()
     assert 'logging' in config['config'].keys()
 
-    if not path.isdir(config_dir):
-        mkdir(config_dir)
+    if not path.isdir(_config_dir):
+        mkdir(_config_dir)
 
-    with open(config_yaml_path, 'w') as yaml_file:
+    with open(_config_yaml_path, 'w') as yaml_file:
         yaml_file.write(yaml.dump(config))
 
 
 def load_config():
     '''Tries to load config yaml, returns defaults if not found'''
 
-    if path.isfile(config_yaml_path):
-        with open(config_yaml_path, 'r') as yaml_file:
+    if path.isfile(_config_yaml_path):
+        with open(_config_yaml_path, 'r') as yaml_file:
             try:
                 config = yaml.safe_load(yaml_file)
                 assert 'config' in config.keys()

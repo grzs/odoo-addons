@@ -9,6 +9,6 @@
     'version': '0.1',
     'depends': ['base'],
     'data': [],
-    'external_dependencies': {'python': ['jaeger_client', 'pyyaml']},
+    'external_dependencies': {'python': ['jaeger_client', 'yaml']},
     'post_load': 'init_tracer'
 }
