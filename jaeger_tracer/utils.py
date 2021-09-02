@@ -1,5 +1,18 @@
 # coding: utf-8
 
+from os import path, mkdir
+import yaml
+from jaeger_client import Config
+
+# Logging is already initialized during odoo bootup
+# import logging
+# logging.getLogger('').handlers = []
+# logging.basicConfig(format='%(message)s', level=logging.DEBUG)
+
+# jaeger config file paths
+config_dir = path.expanduser('~/.config')
+config_yaml_path = path.join(config_dir, 'jaeger.yaml')
+
 default_config = {
     'config': {
         'sampler': {
@@ -21,12 +34,6 @@ def save_config(config):
     assert 'param' in config['config']['sampler'].keys()
     assert 'logging' in config['config'].keys()
 
-    from os import path, mkdir
-    import yaml
-
-    config_dir = path.expanduser('~/.config')
-    config_yaml_path = path.join(config_dir, 'jaeger.yaml')
-
     if not path.isdir(config_dir):
         mkdir(config_dir)
 
@@ -37,12 +44,6 @@ def save_config(config):
 def load_config():
     '''Tries to load config yaml, returns defaults if not found'''
 
-    from os import path
-    import yaml
-    from .utils import default_config, save_config
-
-    config_dir = path.expanduser('~/.config')
-    config_yaml_path = path.join(config_dir, 'jaeger.yaml')
     if path.isfile(config_yaml_path):
         with open(config_yaml_path, 'r') as yaml_file:
             try:
@@ -69,17 +70,10 @@ def load_config():
 def init_tracer():
     '''Initializes the global tracer object'''
 
-    # Logging is already initialized during odoo bootup
-    # import logging
-    # logging.getLogger('').handlers = []
-    # logging.basicConfig(format='%(message)s', level=logging.DEBUG)
-
     # Load config
-    from .utils import load_config
     config, service_name = load_config()
 
     # Instatiate jaeger config object
-    from jaeger_client import Config
     jaeger_config = Config(
         config=config,
         service_name=service_name,
