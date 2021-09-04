@@ -63,7 +63,7 @@ To instrument your apps, you can use a decorator provided by the module, like th
            self.jaeger_test(self.n)
            return res
 
-..image:: static/img/jaeger_ui.png
+.. image:: static/img/jaeger_ui.png
 
 Check out the official documentation for more:
 
