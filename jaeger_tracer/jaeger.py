@@ -16,13 +16,14 @@ def span(_func=None, *,
         @functools.wraps(func)
         def _span(*args, **kwargs):
             # filling span properties
-            _tags = tags
-            _log_kv = log_kv
             _operation = func.__name__ if not operation else operation
+            _tags, _log_kv = {}, {}
+            _tags.update(tags)
+            _log_kv.update(log_kv)
 
-            if 'module' not in _tags.keys():
+            if 'module' not in tags.keys():
                 _tags['odoo.module'] = func.__module__
-            if 'event' not in _log_kv.keys() and func.__doc__:
+            if 'event' not in log_kv.keys() and func.__doc__:
                 _log_kv['event'] = func.__doc__
 
             tracer = opentracing.tracer
