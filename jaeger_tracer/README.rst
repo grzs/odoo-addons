@@ -34,9 +34,9 @@ If not found it creates it with the default settings:
 Usage
 =====
 
-To instrument your apps, you can use a decorator provided by the module, like this:
-
 .. highlight:: python
+
+To instrument your apps, you can use a decorator provided by the module, like this::
 
    # -*- coding: utf-8 -*-
    from odoo import http
@@ -45,7 +45,6 @@ To instrument your apps, you can use a decorator provided by the module, like th
 
 
    class Website(Website):
-
        n = 42
 
        @jaeger.span(tags={'my.tag': 'my_value', 'fact.n': n})
