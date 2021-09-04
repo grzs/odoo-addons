@@ -34,35 +34,35 @@ If not found it creates it with the default settings:
 Usage
 =====
 
-To instrument your apps, you can use a decorator provided by the module, like this::
+To instrument your apps, you can use a decorator provided by the module, like this:
 
-  .. highlight:: python
+.. highlight:: python
 
-     # -*- coding: utf-8 -*-
-     from odoo import http
-     from odoo.addons.jaeger_tracer import jaeger
-     from odoo.addons.website.controllers.main import Website
+   # -*- coding: utf-8 -*-
+   from odoo import http
+   from odoo.addons.jaeger_tracer import jaeger
+   from odoo.addons.website.controllers.main import Website
 
 
-     class Website(Website):
+   class Website(Website):
 
-         n = 42
+       n = 42
 
-         @jaeger.span(tags={'my.tag': 'my_value', 'fact.n': n})
-         def jaeger_test(self, n):
-             fact = 1
-             for i in range(1, n+1):
-                 fact = fact * i
-             return fact
+       @jaeger.span(tags={'my.tag': 'my_value', 'fact.n': n})
+       def jaeger_test(self, n):
+           fact = 1
+           for i in range(1, n+1):
+               fact = fact * i
+           return fact
 
-         @jaeger.span
-         @http.route('/', type='http', auth="public", website=True, sitemap=True)
-         def index(self, **kw):
-             '''Inheriting the basic website controller for testing jaeger'''
+       @jaeger.span
+       @http.route('/', type='http', auth="public", website=True, sitemap=True)
+       def index(self, **kw):
+           '''Inheriting the basic website controller for testing jaeger'''
 
-             res = super(Website, self).index(**kw)
-             self.jaeger_test(self.n)
-             return res
+           res = super(Website, self).index(**kw)
+           self.jaeger_test(self.n)
+           return res
 
 Check out the official documentation for more:
 
