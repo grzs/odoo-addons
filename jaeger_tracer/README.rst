@@ -68,7 +68,7 @@ To instrument your apps, you can use a decorator provided by the module, like th
 Check out the official documentation for more:
 
 * `Opentracing tutorial <https://github.com/yurishkuro/opentracing-tutorial/tree/master/python>`_
-* `Python Jaeger Client documentation <https://github.com/jaegertracing/jaeger-client-python>`_.
+* `Python Jaeger Client documentation <https://github.com/jaegertracing/jaeger-client-python>`_
 
 Known Issues
 ============
