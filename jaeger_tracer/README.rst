@@ -63,6 +63,8 @@ To instrument your apps, you can use a decorator provided by the module, like th
            self.jaeger_test(self.n)
            return res
 
+..image:: static/img/jaeger_ui.png
+
 Check out the official documentation for more:
 
 * `Opentracing tutorial <https://github.com/yurishkuro/opentracing-tutorial/tree/master/python>`_
