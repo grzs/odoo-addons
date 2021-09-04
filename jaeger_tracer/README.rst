@@ -34,9 +34,7 @@ If not found it creates it with the default settings:
 Usage
 =====
 
-To instrument your apps, you can use a decorator provided by the module, like this:
-
-.. ::
+To instrument your apps, you can use a decorator provided by the module, like this::
 
    # -*- coding: utf-8 -*-
    from odoo import http
