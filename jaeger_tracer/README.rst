@@ -47,18 +47,18 @@ To instrument your apps, you can use a decorator provided by the module, like th
    class Website(Website):
        n = 42
 
-       @jaeger.span(tags={'my.tag': 'my_value', 'fact.n': n})
+       @jaeger.span(tags={'fact.n': n})
        def jaeger_test(self, n):
+           '''Doing nothing except testing jaeger while counting the factorial of n'''
            fact = 1
            for i in range(1, n+1):
                fact = fact * i
            return fact
 
-       @jaeger.span
+       @jaeger.span(tags={'my.tag': 'my_value'})
        @http.route('/', type='http', auth="public", website=True, sitemap=True)
        def index(self, **kw):
            '''Inheriting the basic website controller for testing jaeger'''
-
            res = super(Website, self).index(**kw)
            self.jaeger_test(self.n)
            return res
