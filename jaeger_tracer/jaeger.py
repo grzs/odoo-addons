@@ -2,6 +2,8 @@
 
 import functools
 import opentracing
+from jaeger_client.tracer import Tracer
+from .utils import init_tracer
 
 
 def span(_func=None, *,
@@ -26,7 +28,12 @@ def span(_func=None, *,
             if 'event' not in log_kv.keys() and func.__doc__:
                 _log_kv['event'] = func.__doc__
 
+            # initialize tracer object if needed
+            if not isinstance(opentracing.tracer, Tracer):
+                init_tracer()
+
             tracer = opentracing.tracer
+
             with tracer.start_active_span(_operation) as scope:
                 # set tags for span
                 for _ in _tags.items():
