@@ -4,10 +4,9 @@ from os import path, mkdir
 import yaml
 from jaeger_client import Config
 
-# Logging is already initialized during odoo bootup
-# import logging
-# logging.getLogger('').handlers = []
-# logging.basicConfig(format='%(message)s', level=logging.DEBUG)
+# logging
+import logging
+_logger = logging.getLogger(__name__)
 
 # jaeger config file paths
 _config_dir = path.expanduser('~/.config')
