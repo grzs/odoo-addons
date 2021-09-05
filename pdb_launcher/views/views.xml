@@ -42,7 +42,7 @@
                             <div class="mx-auto text-left" width="500px">
                                 <ul>
                                     <li>the selected python debugger module (if not pdb) is installed;</li>
-                                    <li>odoo is running in foreground with a single http worker and reasonably high timeout</br>
+                                    <li>odoo is running in foreground with a single http worker and reasonably high timeout<br/>
                                     (odoo-bin --workers 1 --limit-time-cpu 1800 --limit-time-real 186).</li>
                                 </ul>
                             </div>
