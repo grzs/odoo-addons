@@ -5,10 +5,8 @@
 Summary
 =======
 
-This module when installed, initializes the global opentracing.tracer object
-for `Jaeger <https://www.jaegertracing.io>`_,
-with configuration parameters loaded from file ~/.config/jaeger.yaml. If no config file
-exists the init function poplutes it with default values.
+This module provides a function decorator to utilize tracing with the
+`Jaeger <https://www.jaegertracing.io>`_ stack.
 
 Prerequisits
 ============
@@ -19,7 +17,7 @@ Prerequisits
 Configuration
 =============
 
-The module looks for configuration file ``~/.config/jaeger.yaml`` at startup.
+The decorator loads configuration file ``~/.config/jaeger.yaml`` at tracer initialization.
 If not found it creates it with the default settings:
 
 .. code-block:: yaml
@@ -36,7 +34,7 @@ Usage
 
 .. highlight:: python
 
-To instrument your apps, you can use a decorator provided by the module, like this::
+To instrument your apps, you can use the decorator provided by the module, like this::
 
    # -*- coding: utf-8 -*-
    from odoo import http
@@ -69,11 +67,6 @@ Check out the official documentation for more:
 
 * `Opentracing tutorial <https://github.com/yurishkuro/opentracing-tutorial/tree/master/python>`_
 * `Python Jaeger Client documentation <https://github.com/jaegertracing/jaeger-client-python>`_
-
-Known Issues
-============
-
-* fails reporting spans in multiprocessing mode
 
 Authors
 =======
