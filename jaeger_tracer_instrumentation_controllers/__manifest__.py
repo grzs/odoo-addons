@@ -9,4 +9,5 @@
     'version': '0.1',
     'depends': ['jaeger_tracer'],
     'data': [],
+    'post_load': 'monkey_patch_odoo_http_route',
 }

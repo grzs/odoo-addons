@@ -35,12 +35,14 @@ class IrHttp(models.AbstractModel):
                 'menu_data'
             ]
             for key, value in response.qcontext.items():
-                if isinstance(value, models.AbstractModel):
-                    scope.span.set_tag(f'odoo.response.qcontext.{key}.name', value.name)
+                if isinstance(value, models.AbstractModel) and len(value) == 1:
+                    scope.span.set_tag(
+                        'odoo.response.qcontext.{}.name'.format(key), value.name)
                 elif key in keys_notag:
                     continue
 
                 value_str = str(value)
-                scope.span.set_tag(f'odoo.response.qcontext.{key}', value_str)
+                scope.span.set_tag(
+                    'odoo.response.qcontext.{}'.format(key), value_str)
 
         return response
