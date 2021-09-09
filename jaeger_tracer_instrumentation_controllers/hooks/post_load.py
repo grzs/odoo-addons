@@ -28,14 +28,15 @@ def route_patched(route=None, **kw):
                 res = f(*args, **kwargs)
 
                 # add qcontext items to trace tags
-                for key, value in res.qcontext.items():
-                    if isinstance(value, models.AbstractModel) and len(value) == 1:
-                        scope.span.set_tag(
-                            'odoo.response.qcontext.{}.name'.format(key), value.name)
+                if hasattr(res, 'qcontext'):
+                    for key, value in res.qcontext.items():
+                        if isinstance(value, models.AbstractModel) and len(value) == 1:
+                            scope.span.set_tag(
+                                'odoo.response.qcontext.{}.name'.format(key), value.name)
 
-                    value_str = str(value)
-                    scope.span.set_tag(
-                        'odoo.response.qcontext.{}'.format(key), value_str)
+                        value_str = str(value)
+                        scope.span.set_tag(
+                            'odoo.response.qcontext.{}'.format(key), value_str)
 
             return res
         return route_wrapper
