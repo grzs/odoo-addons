@@ -7,6 +7,7 @@ from jaeger_client import Config
 # logging
 import logging
 _logger = logging.getLogger(__name__)
+_logger.setLevel(30)  # setting log level to WARNING
 
 # jaeger config file paths
 _config_dir = path.expanduser('~/.config')
