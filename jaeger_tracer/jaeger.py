@@ -19,11 +19,10 @@ def span(_func=None, *,
         def _span(*args, **kwargs):
             # filling span properties
             _operation = func.__name__ if not operation else operation
-            _tags, _log_kv = {}, {}
-            _tags.update(tags)
-            _log_kv.update(log_kv)
+            _tags = tags.copy()
+            _log_kv = log_kv.copy()
 
-            if 'module' not in tags.keys():
+            if 'odoo.module' not in tags.keys():
                 _tags['odoo.module'] = func.__module__
             if 'event' not in log_kv.keys() and func.__doc__:
                 _log_kv['event'] = func.__doc__
