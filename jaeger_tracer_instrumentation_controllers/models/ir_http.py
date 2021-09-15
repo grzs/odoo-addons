@@ -34,15 +34,16 @@ class IrHttp(models.AbstractModel):
                 'session_info',
                 'menu_data'
             ]
-            for key, value in response.qcontext.items():
-                if isinstance(value, models.AbstractModel) and len(value) == 1:
-                    scope.span.set_tag(
-                        'odoo.response.qcontext.{}.name'.format(key), value.name)
-                elif key in keys_notag:
-                    continue
+            if hasattr(response, 'qcontext'):
+                for key, value in response.qcontext.items():
+                    if isinstance(value, models.AbstractModel) and len(value) == 1:
+                        scope.span.set_tag(
+                            'odoo.response.qcontext.{}.name'.format(key), value.name)
+                    elif key in keys_notag:
+                        continue
 
-                value_str = str(value)
-                scope.span.set_tag(
-                    'odoo.response.qcontext.{}'.format(key), value_str)
+                    value_str = str(value)
+                    scope.span.set_tag(
+                        'odoo.response.qcontext.{}'.format(key), value_str)
 
         return response
