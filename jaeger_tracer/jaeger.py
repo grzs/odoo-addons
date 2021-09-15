@@ -19,7 +19,7 @@ def span(_func=None, *,
         def _span(*args, **kwargs):
             # filling span properties
             _operation = func.__name__ if not operation else operation
-            _tags = tags.cpoy()
+            _tags = tags.copy()
             _log_kv = log_kv.copy()
 
             if 'odoo.module' not in tags.keys():
