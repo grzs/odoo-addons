@@ -51,7 +51,7 @@ class ContextItem(graphene.InputObjectType):
     v = graphene.Field(Oobject, required=True)
 
 
-class OdooQueryFactory():
+class GraphqlFactory():
     record_types = {}
     domain_operators = [
         '=',
@@ -72,7 +72,6 @@ class OdooQueryFactory():
         'child_of',
         'parent_of',
     ]
-    model_fields = {}
 
     @classmethod
     def _query_db(cls):
@@ -92,10 +91,12 @@ class OdooQueryFactory():
             field_tuples = cr.fetchall()
             cr.rollback()
 
+        model_fields = {}
         for t in field_tuples:
-            if t[0] not in cls.model_fields.keys():
-                cls.model_fields.update({t[0]: []})
-            cls.model_fields[t[0]].append(t[1:])
+            if t[0] not in model_fields.keys():
+                model_fields.update({t[0]: []})
+            model_fields[t[0]].append(t[1:])
+        return model_fields
 
     @classmethod
     def _eval_domain(cls, domain):
@@ -248,7 +249,7 @@ class OdooQueryFactory():
             return model.search(domain, limit=limit, offset=offset)
 
     @classmethod
-    def _field_params(cls, model_name):
+    def _field_params(cls, model_name, record_type):
         def resolver(parent, info, model_name=model_name, **kw):
             env = info.context['env']
             return cls.query_orm(env, model_name, **kw)
@@ -257,7 +258,7 @@ class OdooQueryFactory():
         resolver_name = f'resolve_{field_name}'
         return {
             field_name: graphene.List(
-                graphene.NonNull(cls.record_types[model_name]),
+                graphene.NonNull(record_type),
                 required=True,
                 apikey=graphene.String(),
                 company=graphene.Int(),
@@ -270,11 +271,11 @@ class OdooQueryFactory():
             resolver_name: resolver,
         }
 
-    # main producer
+    # producer methods
     @classmethod
-    def make(cls):
-        cls._query_db()
-        for model_name, fields in cls.model_fields.items():
+    def make_query(cls):
+        model_fields = cls._query_db()
+        for model_name, fields in model_fields.items():
             record_type = cls._make_record_type(model_name, fields)
             cls.record_types.update({model_name: record_type})
 
@@ -289,10 +290,11 @@ class OdooQueryFactory():
             'resolve_context': cls.resolve_context,
             'resolve_company_ids': cls.resolve_company_ids,
         }
-        for model_name in cls.model_fields.keys():
-            query_params.update(cls._field_params(model_name))
+        for model_name, record_type in cls.record_types.items():
+            query_params.update(model_name, record_type)
 
         return type('QueryORM', (graphene.ObjectType, ), query_params)
 
 
-schema = graphene.Schema(query=OdooQueryFactory.make())
+Query = GraphqlFactory.make_query()
+schema = graphene.Schema(query=Query)

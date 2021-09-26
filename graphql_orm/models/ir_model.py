@@ -7,3 +7,4 @@ class IrModel(models.Model):
     _inherit = 'ir.model'
 
     graphql = fields.Boolean()
+    graphql_write = fields.Boolean()
