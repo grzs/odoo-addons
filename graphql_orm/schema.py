@@ -125,6 +125,7 @@ class GraphqlFactory():
     @classmethod
     def _eval_oobject(cls, o):
         if o.otype is not None:
+            p_lambda = r"lambda [a-z]+[a-z0-9]*:.*"
             if not o.v:
                 raise UserError(_("'v' is required when 'otype' is given!"))
             if o.otype == Otype.STR:
@@ -136,7 +137,7 @@ class GraphqlFactory():
             elif o.otype == Otype.BOOL:
                 return bool(o.v)
             elif o.otype == Otype.LAMBDA:
-                pattern = '^lambda [a-z]+[a-z0-9]*:'
+                pattern = rf"^{p_lambda}$"
                 if re.match(pattern, o.v):
                     return eval(o.v)
                 else:
@@ -144,17 +145,22 @@ class GraphqlFactory():
                         _(f"'{o.v}' is not a valid lambda expression!"))
             elif o.otype == Otype.ORM:
                 # regex pattern
-                p_model = r"(([a-z][a-z\.]*[a-z])|[a-z])"
-                p_context = r"\{('': ?.*)(, ?'': ?.*)*\}"
+                p_name = r"(([a-z][a-z0-9_]*[a-z0-9])|[a-z])"
+                p_fields = rf"'({p_name}(\.{p_name})*"
+                p_context_provided = rf"{{('{p_name}': ?[^ ]+)(, ?'{p_name}': ?[^ ]+)*}}"
+                p_context_overrides = rf"({p_name}=[^ ]+)(, ?{p_name}=[^ ]+)*"
+                p_context = rf"(({p_context_provided})|({p_context_overrides})|({p_context_provided}, ?{p_context_overrides}))"
                 p_with = rf".with_((user)|(company)|(context))\(([0-9]+|({p_context}))\)"
-                p_field = r"(([a-z][a-z_]*[a-z])|[a-z])"
-                p_fields = rf"{p_field}(.{p_field})*"
-                p_ops = "|".join([f"({do})" for do in cls.domain_operators])
-                p_domain_item = rf"('(!|&|\|)'|(\('{p_fields}','({p_ops})',.*\)))"
+                p_operator = "|".join([f"({do})" for do in cls.domain_operators])
+                p_domain_item = rf"('(!|&|\|)'|(\{p_fields}' ?,'({p_operator})', ?[^ ]+\)))"
                 p_domain = rf"{p_domain_item}(,{p_domain_item})*"
                 p_search = rf"search\(\[({p_domain})*\]\)"
                 p_browse = r"browse\(([0-9]+,)*([0-9]+)\)"
-                pattern = rf"^env\['{p_model}'\]({p_with})*\.(({p_search})|({p_browse}))(\.{p_fields})?$"
+                p_filtered = rf"filtered\({p_lambda}\)"
+                p_modifier = rf"(({p_with})|({p_filtered}))"
+                p_recordset = rf"(({p_search})|({p_browse}))(\.{p_modifier})*"
+                p_model = r"(([a-z][a-z\.]*[a-z])|[a-z])"
+                pattern = rf"^env\['{p_model}'\]({p_with}\.)*{p_recordset}(\.{p_fields})*$"
                 if re.match(pattern, o.v):
                     model_name = re.findall(p_model, o.v)[1][0]
                     reg = registry()
@@ -233,7 +239,7 @@ class GraphqlFactory():
         if kw.get('apikey'):
             user_id = env['res.users.apikeys']._check_credentials(
                 scope='graphql', key=kw['apikey'])
-            context.update({'uid': user_id})
+            context.update(uid=user_id)
             model = model.with_user(user_id)
         if kw.get('company'):
             model = model.with_company(kw['company'])
