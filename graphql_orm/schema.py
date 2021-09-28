@@ -10,11 +10,14 @@
 import graphene
 import re
 
+from psycopg2 import ProgrammingError
+
 from odoo import registry, api, SUPERUSER_ID
 from odoo import _
 from odoo.exceptions import UserError
 from odoo.addons.graphql_base import OdooObjectType
 
+from .odoo_orm_regex import p as pattern_orm
 
 class Otype(graphene.Enum):
     STR = 1
@@ -52,45 +55,32 @@ class ContextItem(graphene.InputObjectType):
 
 
 class GraphqlFactory():
-    record_types = {}
-    domain_operators = [
-        '=',
-        '!=',
-        '>',
-        '>=',
-        '<',
-        '<=',
-        '=?',
-        '=like',
-        'like',
-        'not like',
-        'ilike',
-        'not ilike',
-        '=ilike',
-        'in',
-        'not in',
-        'child_of',
-        'parent_of',
-    ]
+    query_types = {}
 
     @classmethod
-    def _query_db(cls):
+    def _query_db_fields(cls, where_clause):
         field_tuples = []
-        fields_to_query = ','.join([
+        fields = [
             'model',
             'name',
             'ttype',
             'relation',
             'required'
-        ])
-        query_models = "SELECT model FROM ir_model WHERE graphql = 't'"
-        query_fields = f"SELECT {fields_to_query} FROM ir_model_fields WHERE model IN ({query_models})"
+        ]
+        query = f"SELECT {','.join(fields)} FROM ir_model_fields {where_clause}"
         reg = registry()
-        with reg.cursor() as cr:
-            cr.execute(query_fields)
-            field_tuples = cr.fetchall()
-            cr.rollback()
-
+        try:
+            with reg.cursor() as cr:
+                cr.execute(query)
+                field_tuples = cr.fetchall()
+                cr.rollback()
+        except ProgrammingError as e:
+            msg = e.args[0]
+            if re.match('column .[a-z_]+. does not exist', msg):
+                return {}
+            else:
+                raise e
+        
         model_fields = {}
         for t in field_tuples:
             if t[0] not in model_fields.keys():
@@ -125,7 +115,6 @@ class GraphqlFactory():
     @classmethod
     def _eval_oobject(cls, o):
         if o.otype is not None:
-            p_lambda = r"lambda [a-z]+[a-z0-9]*:.*"
             if not o.v:
                 raise UserError(_("'v' is required when 'otype' is given!"))
             if o.otype == Otype.STR:
@@ -137,32 +126,16 @@ class GraphqlFactory():
             elif o.otype == Otype.BOOL:
                 return bool(o.v)
             elif o.otype == Otype.LAMBDA:
-                pattern = rf"^{p_lambda}$"
+                pattern = r"^lambda (?P<var>[a-z]):.*(?P=var).*$"
                 if re.match(pattern, o.v):
                     return eval(o.v)
                 else:
                     raise UserError(
                         _(f"'{o.v}' is not a valid lambda expression!"))
             elif o.otype == Otype.ORM:
-                # regex pattern
-                p_name = r"(([a-z][a-z0-9_]*[a-z0-9])|[a-z])"
-                p_fields = rf"'({p_name}(\.{p_name})*"
-                p_context_provided = rf"{{('{p_name}': ?[^ ]+)(, ?'{p_name}': ?[^ ]+)*}}"
-                p_context_overrides = rf"({p_name}=[^ ]+)(, ?{p_name}=[^ ]+)*"
-                p_context = rf"(({p_context_provided})|({p_context_overrides})|({p_context_provided}, ?{p_context_overrides}))"
-                p_with = rf".with_((user)|(company)|(context))\(([0-9]+|({p_context}))\)"
-                p_operator = "|".join([f"({do})" for do in cls.domain_operators])
-                p_domain_item = rf"('(!|&|\|)'|(\{p_fields}' ?,'({p_operator})', ?[^ ]+\)))"
-                p_domain = rf"{p_domain_item}(,{p_domain_item})*"
-                p_search = rf"search\(\[({p_domain})*\]\)"
-                p_browse = r"browse\(([0-9]+,)*([0-9]+)\)"
-                p_filtered = rf"filtered\({p_lambda}\)"
-                p_modifier = rf"(({p_with})|({p_filtered}))"
-                p_recordset = rf"(({p_search})|({p_browse}))(\.{p_modifier})*"
-                p_model = r"(([a-z][a-z\.]*[a-z])|[a-z])"
-                pattern = rf"^env\['{p_model}'\]({p_with}\.)*{p_recordset}(\.{p_fields})*$"
-                if re.match(pattern, o.v):
-                    model_name = re.findall(p_model, o.v)[1][0]
+                match = pattern_orm.match(o.v)
+                if match:
+                    model_name = match.group('model')
                     reg = registry()
                     if model_name in reg.keys():
                         with reg.cursor() as cr:
@@ -185,20 +158,20 @@ class GraphqlFactory():
 
     # factory methods
     @classmethod
-    def _make_field_type(cls, odoo_type):
+    def _make_field_type(cls, odoo_type, required=False):
         if odoo_type in ['char', 'text']:
-            return graphene.String()
+            return graphene.String(required=required)
         elif odoo_type == 'integer':
-            return graphene.Int()
+            return graphene.Int(required=required)
         elif odoo_type == 'float':
-            return graphene.Float()
+            return graphene.Float(required=required)
         elif odoo_type == 'boolean':
-            return graphene.Boolean()
+            return graphene.Boolean(required=required)
         else:
             return None
 
     @classmethod
-    def _make_record_type(cls, model_name, fields):
+    def _make_query_type(cls, model_name, fields):
         type_params = {'id': graphene.ID()}
         for t in fields:
             f_name, f_ttype, f_relation, f_required = t
@@ -211,25 +184,59 @@ class GraphqlFactory():
         type_name = ''.join([s.capitalize() for s in model_name.split('.')])
         return type(type_name, (OdooObjectType, ), type_params)
 
+    @classmethod
+    def _make_mutation_type(cls, model_name, fields, update=False):
+        class Arguments:
+            apikey = graphene.String()
+            company = graphene.Int()
+            context = graphene.List(graphene.NonNull(ContextItem))
+            id = graphene.ID(required=update)
+
+        if update:
+            setattr(Arguments, 'delete', graphene.Boolean())
+
+        for t in fields:
+            f_name, f_ttype, f_relation, f_required = t
+            if f_name == 'id':
+                continue
+            required = False if update else f_required
+            field = cls._make_field_type(f_ttype, required=required)
+            if field:
+                setattr(Arguments, f_name, field)
+
+        @staticmethod
+        def mutate(self, info,
+                   model_name=model_name, model_getter=cls._get_model,
+                   update=update, delete=False, **kw):
+
+            env = info.context['env']
+            model = model_getter(env, model_name, **kw)
+            if update:
+                record = model.browse(int(kw['id']))
+                if delete:
+                    if record.unlink():
+                        return model
+                else:
+                    record.write(kw)
+                return record
+            return model.create(kw)
+
+        type_params = {
+            'Arguments': Arguments,
+            'Output': cls.query_types[model_name],
+            'mutate': mutate,
+        }
+        mode = 'Update' if update else 'Create'
+        type_name = mode + ''.join([s.capitalize() for s in model_name.split('.')])
+        return type(type_name, (graphene.Mutation, ), type_params)
+
     # resolvers
     @staticmethod
     def resolve_company_ids(parent, info):
         return [c.id for c in info.context['env'].companies]
 
-    @staticmethod
-    def resolve_context(parent, info, **kw):
-        env = info.context['env']
-        context = env.context.copy()
-        if kw.get('apikey'):
-            user_id = env['res.users.apikeys']._check_credentials(
-                scope='graphql', key=kw['apikey'])
-            context.update({'uid': user_id})
-        if kw.get('context'):
-            context.update(parent._eval_context(kw['context']))
-        return str(context)
-
     @classmethod
-    def query_orm(cls, env, model_name, **kw):
+    def _get_model(cls, env, model_name, **kw):
         try:
             model = env[model_name]
         except KeyError:
@@ -238,33 +245,35 @@ class GraphqlFactory():
         context = env.context.copy()
         if kw.get('apikey'):
             user_id = env['res.users.apikeys']._check_credentials(
-                scope='graphql', key=kw['apikey'])
+                scope='graphql', key=kw.pop('apikey'))
             context.update(uid=user_id)
             model = model.with_user(user_id)
         if kw.get('company'):
-            model = model.with_company(kw['company'])
+            model = model.with_company(kw.pop('company'))
         if kw.get('context'):
-            context.update(cls._eval_context(kw['context']))
-        model = model.with_context(context)
-        if kw.get('ids'):
-            return model.browse(kw['ids'])
-        else:
-            domain = cls._eval_domain(kw.get('domain'))
-            limit = kw.get('limit')
-            offset = kw.get('offset')
-            return model.search(domain, limit=limit, offset=offset)
+            context.update(cls._eval_context(kw.pop('context')))
+
+        return model.with_context(context)
 
     @classmethod
-    def _field_params(cls, model_name, record_type):
+    def _field_params(cls, model_name, query_type):
         def resolver(parent, info, model_name=model_name, **kw):
             env = info.context['env']
-            return cls.query_orm(env, model_name, **kw)
+            model = cls._get_model(env, model_name, **kw)
+
+            if kw.get('ids'):
+                return model.browse(kw['ids'])
+            else:
+                domain = cls._eval_domain(kw.get('domain'))
+                limit = kw.get('limit')
+                offset = kw.get('offset')
+                return model.search(domain, limit=limit, offset=offset)
 
         field_name = '_'.join(model_name.split('.'))
         resolver_name = f'resolve_{field_name}'
         return {
             field_name: graphene.List(
-                graphene.NonNull(record_type),
+                graphene.NonNull(query_type),
                 required=True,
                 apikey=graphene.String(),
                 company=graphene.Int(),
@@ -279,28 +288,72 @@ class GraphqlFactory():
 
     # producer methods
     @classmethod
-    def make_query(cls):
-        model_fields = cls._query_db()
-        for model_name, fields in model_fields.items():
-            record_type = cls._make_record_type(model_name, fields)
-            cls.record_types.update({model_name: record_type})
+    def _make_query(cls):
+        subquery_models = "SELECT model FROM ir_model WHERE graphql = 't'"
+        where_clause = f"WHERE model IN ({subquery_models})"
+        query_model_fields = cls._query_db_fields(where_clause)
 
-        query_params = {
-            'context': graphene.Field(
-                graphene.String,
-                apikey=graphene.String(),
-                company=graphene.Int(),
-                context=graphene.List(graphene.NonNull(ContextItem)),
-            ),
-            'company_ids': graphene.List(graphene.Int),
-            'resolve_context': cls.resolve_context,
-            'resolve_company_ids': cls.resolve_company_ids,
-        }
-        for model_name, record_type in cls.record_types.items():
-            query_params.update(model_name, record_type)
+        @staticmethod
+        def resolve_context(parent, info, **kw):
+            env = info.context['env']
+            context = env.context.copy()
+            if kw.get('apikey'):
+                user_id = env['res.users.apikeys']._check_credentials(
+                    scope='graphql', key=kw['apikey'])
+                context.update({'uid': user_id})
+            if kw.get('context'):
+                context.update(cls._eval_context(kw['context']))
+            return str(context)
 
-        return type('QueryORM', (graphene.ObjectType, ), query_params)
+        if len(query_model_fields):
+            for model_name, fields in query_model_fields.items():
+                cls.query_types.update({
+                    model_name: cls._make_query_type(model_name, fields)
+                })
+
+            query_params = {
+                'context': graphene.Field(
+                    graphene.String,
+                    apikey=graphene.String(),
+                    company=graphene.Int(),
+                    context=graphene.List(graphene.NonNull(ContextItem)),
+                ),
+                'company_ids': graphene.List(graphene.Int),
+                'resolve_context': resolve_context,
+                'resolve_company_ids': cls.resolve_company_ids,
+            }
+            for model_name, query_type in cls.query_types.items():
+                query_params.update(cls._field_params(model_name, query_type))
+
+            return type('QueryORM', (graphene.ObjectType, ), query_params)
+        else:
+            return None
+
+    @classmethod
+    def _make_mutation(cls):
+        subquery_models = "SELECT model FROM ir_model WHERE graphql = 't'"
+        subquery_models_writable = f"{subquery_models} AND graphql_write = 't'"
+        where_clause = f"WHERE model IN ({subquery_models_writable})"
+        mutation_model_fields = cls._query_db_fields(where_clause)
+        if len(mutation_model_fields):
+            mutation_params = {}
+            for model_name, fields in mutation_model_fields.items():
+                field_name = '_'.join(model_name.split('.'))
+                mutation_type = cls._make_mutation_type(model_name, fields)
+                mutation_update_type = cls._make_mutation_type(
+                    model_name, fields, update=True)
+                mutation_params.update({
+                    f'create_{field_name}': mutation_type.Field(),
+                    field_name: mutation_update_type.Field(),
+                })
+            return type('MutationORM', (graphene.ObjectType, ), mutation_params)
+        else:
+            return None
+
+    @classmethod
+    def make(cls):
+        return cls._make_query(), cls._make_mutation()
 
 
-Query = GraphqlFactory.make_query()
-schema = graphene.Schema(query=Query)
+Query, Mutation = GraphqlFactory.make()
+schema = graphene.Schema(query=Query, mutation=Mutation)
