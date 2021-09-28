@@ -55,6 +55,10 @@ class ContextItem(graphene.InputObjectType):
 
 
 class GraphqlFactory():
+    relation_ttypes = [
+        'many2one', 'many2one_reference', 'reference',
+        'one2many', 'many2many',
+    ]
     query_types = {}
 
     @classmethod
@@ -159,14 +163,44 @@ class GraphqlFactory():
     # factory methods
     @classmethod
     def _make_field_type(cls, odoo_type, required=False):
-        if odoo_type in ['char', 'text']:
+        '''Map scalar odoo types to graphql types
+        Mapping:
+          String: char, html, selection, text, date, datetime
+          Int: integer
+          Float: float, monetary
+          Boolean: boolean
+          ?: binary, reference
+        '''
+        if odoo_type in ['char', 'text', 'html', 'selection', 'date', 'datetime']:
             return graphene.String(required=required)
         elif odoo_type == 'integer':
             return graphene.Int(required=required)
-        elif odoo_type == 'float':
+        elif odoo_type in ['float', 'monetary']:
             return graphene.Float(required=required)
         elif odoo_type == 'boolean':
             return graphene.Boolean(required=required)
+        elif odoo_type in ['reference']:
+            return graphene.String(required=required)
+        # elif odoo_type in ['many2one', 'many2one_reference']:
+        #     return graphene.Int(required=required)
+        # elif odoo_type in ['one2many', 'many2many']:
+        #     return graphene.List(graphene.Int, required=required)
+        else:
+            return None
+
+    @classmethod
+    def _make_relation_field_type(cls, odoo_type, required=False):
+        '''Map relation odoo types to graphql types
+        Mapping:
+          Field/Int: many2one, many2one_reference, reference
+          List(Field/Int): one2many, many2many
+        '''
+        if odoo_type in ['reference']:
+            return graphene.String(required=required)
+        elif odoo_type in ['many2one', 'many2one_reference']:
+            return graphene.Int(required=required)
+        elif odoo_type in ['one2many', 'many2many']:
+            return graphene.List(graphene.Int, required=required)
         else:
             return None
 
@@ -175,7 +209,7 @@ class GraphqlFactory():
         type_params = {'id': graphene.ID()}
         for t in fields:
             f_name, f_ttype, f_relation, f_required = t
-            if f_name == 'id':
+            if f_name == 'id' or f_ttype in cls.relation_ttypes:
                 continue
             field = cls._make_field_type(f_ttype)
             if field:
@@ -306,10 +340,19 @@ class GraphqlFactory():
             return str(context)
 
         if len(query_model_fields):
+            # make types
             for model_name, fields in query_model_fields.items():
                 cls.query_types.update({
                     model_name: cls._make_query_type(model_name, fields)
                 })
+
+            # make relations
+            for model_name, fields in query_model_fields.items():
+                for t in fields:
+                    f_name, f_ttype, f_relation, f_required = t
+                    if f_ttype in cls.relation_ttypes:
+                        field = cls._make_relation_field_type(f_ttype)
+                        setattr(cls.query_types[model_name], f_name, field)
 
             query_params = {
                 'context': graphene.Field(

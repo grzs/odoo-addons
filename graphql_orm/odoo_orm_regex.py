@@ -20,7 +20,7 @@ pattern = (
     r"(\.filtered\((?P<ffilter>lambda (?P<var>[a-z]):.*(?P=var).*)\))?"
     r"(?P<fields>(\.\w+)*)$"
 )
-print(pattern, '\n')
+p = re.compile(pattern, flags=re.ASCII)
 
 # tests
 examples = [
@@ -43,15 +43,14 @@ examples = [
     "env['res.partner'].search([('company_id','=',2)]).company_id.name",
 ]
 
-p = re.compile(pattern, flags=re.ASCII)
-for e in examples:
-    match = p.match(e)
-    if match:
-        model, userco, context, ids, domain, ffilter, fields = match.group(
-            'model', 'userco', 'context', 'ids', 'domain', 'ffilter', 'fields')
-        if context:
-            print(f"{e:75}{context}")
-        if domain:
-            print(f"{e:75}{domain}")
-        if ffilter:
-            print(f"{e:75}{ffilter}")
+# for e in examples:
+#     match = p.match(e)
+#     if match:
+#         model, userco, context, ids, domain, ffilter, fields = match.group(
+#             'model', 'userco', 'context', 'ids', 'domain', 'ffilter', 'fields')
+#         if context:
+#             print(f"{e:75}{context}")
+#         if domain:
+#             print(f"{e:75}{domain}")
+#         if ffilter:
+#             print(f"{e:75}{ffilter}")
