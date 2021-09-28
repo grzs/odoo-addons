@@ -171,7 +171,7 @@ class GraphqlFactory():
           Boolean: boolean
           ?: binary, reference
         '''
-        if odoo_type in ['char', 'text', 'html', 'selection', 'date', 'datetime']:
+        if odoo_type in ['char', 'text', 'html', 'selection']:
             return graphene.String(required=required)
         elif odoo_type == 'integer':
             return graphene.Int(required=required)
@@ -179,23 +179,11 @@ class GraphqlFactory():
             return graphene.Float(required=required)
         elif odoo_type == 'boolean':
             return graphene.Boolean(required=required)
+        elif odoo_type == 'date':
+            return graphene.Date(required=required)
+        elif odoo_type == 'datetime':
+            return graphene.DateTime(required=required)
         elif odoo_type in ['reference']:
-            return graphene.String(required=required)
-        # elif odoo_type in ['many2one', 'many2one_reference']:
-        #     return graphene.Int(required=required)
-        # elif odoo_type in ['one2many', 'many2many']:
-        #     return graphene.List(graphene.Int, required=required)
-        else:
-            return None
-
-    @classmethod
-    def _make_relation_field_type(cls, odoo_type, required=False):
-        '''Map relation odoo types to graphql types
-        Mapping:
-          Field/Int: many2one, many2one_reference, reference
-          List(Field/Int): one2many, many2many
-        '''
-        if odoo_type in ['reference']:
             return graphene.String(required=required)
         elif odoo_type in ['many2one', 'many2one_reference']:
             return graphene.Int(required=required)
@@ -205,10 +193,27 @@ class GraphqlFactory():
             return None
 
     @classmethod
+    def _make_relation_field_type(cls, odoo_type, comodel_name, required=False):
+        '''Map relation odoo types to graphql types
+        Mapping:
+          Field/Int: many2one, many2one_reference, reference
+          List(Field/Int): one2many, many2many
+        '''
+        if odoo_type in ['reference']:
+            return graphene.String(required=required)
+        elif odoo_type in ['many2one_reference']:
+            return graphene.Int(required=required)
+        else:
+            return graphene.List(
+                graphene.NonNull(cls.query_types[comodel_name]),
+                required=True)
+
+    @classmethod
     def _make_query_type(cls, model_name, fields):
         type_params = {'id': graphene.ID()}
         for t in fields:
             f_name, f_ttype, f_relation, f_required = t
+            # if f_name == 'id':
             if f_name == 'id' or f_ttype in cls.relation_ttypes:
                 continue
             field = cls._make_field_type(f_ttype)
@@ -327,6 +332,7 @@ class GraphqlFactory():
         where_clause = f"WHERE model IN ({subquery_models})"
         query_model_fields = cls._query_db_fields(where_clause)
 
+        # resolvers
         @staticmethod
         def resolve_context(parent, info, **kw):
             env = info.context['env']
@@ -348,11 +354,23 @@ class GraphqlFactory():
 
             # make relations
             for model_name, fields in query_model_fields.items():
+                type_updated = False
                 for t in fields:
                     f_name, f_ttype, f_relation, f_required = t
-                    if f_ttype in cls.relation_ttypes:
-                        field = cls._make_relation_field_type(f_ttype)
-                        setattr(cls.query_types[model_name], f_name, field)
+                    if f_ttype not in cls.relation_ttypes:
+                        continue
+
+                    if f_relation and f_relation in cls.query_types.keys():
+                        field_type = cls._make_relation_field_type(f_ttype, f_relation)
+                    else:
+                        field_type = cls._make_field_type(f_ttype)
+                    setattr(cls.query_types[model_name], f_name, field_type)
+                    type_updated = True
+
+                # reinit type
+                if type_updated:
+                    delattr(cls.query_types[model_name], '_meta')
+                    cls.query_types[model_name].__init_subclass__()
 
             query_params = {
                 'context': graphene.Field(
