@@ -251,7 +251,7 @@ class GraphqlFactory():
             env = info.context['env']
             model = model_getter(env, model_name, **kw)
             if update:
-                record = model.browse(int(kw['id']))
+                record = model.browse(int(kw.pop('id')))
                 if delete:
                     if record.unlink():
                         return model
