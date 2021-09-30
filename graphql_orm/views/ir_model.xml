@@ -7,10 +7,9 @@
         <field name="arch" type="xml">
             <xpath expr="//sheet/group/group" position="inside">
                 <field name="graphql"/>
-                <field name="graphql_write"/>
-                <!-- <field name="graphql_write" -->
-                <!--        attrs="{'readonly': [('grahpql','=',False)], -->
-                <!--               'invisible': [('grahpql','=',False)]}"/> -->
+                <field name="graphql_write"
+                       attrs="{'readonly': [('graphql','=',False)],
+                              'invisible': [('graphql','=',False)]}"/>
             </xpath>
         </field>
     </record>
