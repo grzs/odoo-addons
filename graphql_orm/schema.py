@@ -12,8 +12,7 @@ import re
 
 from psycopg2 import ProgrammingError
 
-from odoo import registry, api, SUPERUSER_ID
-from odoo import _
+from odoo import registry, api, SUPERUSER_ID, _, http
 from odoo.exceptions import UserError
 from odoo.addons.graphql_base import OdooObjectType
 
@@ -257,6 +256,7 @@ class GraphqlFactory():
                         return model
                 else:
                     record.write(kw)
+                    # record.flush(kw.keys())
                 return record
             return model.create(kw)
 
@@ -273,6 +273,24 @@ class GraphqlFactory():
     @staticmethod
     def resolve_company_ids(parent, info):
         return [c.id for c in info.context['env'].companies]
+
+    @staticmethod
+    def resolve_session_id(parent, info,
+                           login=None, password=None, logout=False):
+        session = http.request.session
+        if not logout and (login and password):
+            db = session['db']
+            session.authenticate(db, login=login, password=password)
+            session.rotate = False
+        elif logout:
+            session.logout()
+            http.root.session_store.delete(session)
+            session.modified = False
+            session.rotate = False
+            return "Session closed"
+        else:
+            session.modified = False
+        return session.sid
 
     @classmethod
     def _get_model(cls, env, model_name, **kw):
@@ -379,9 +397,16 @@ class GraphqlFactory():
                     company=graphene.Int(),
                     context=graphene.List(graphene.NonNull(ContextItem)),
                 ),
+                'session_id': graphene.Field(
+                    graphene.String,
+                    login=graphene.String(),
+                    password=graphene.String(),
+                    logout=graphene.Boolean(default_value=False),
+                ),
                 'company_ids': graphene.List(graphene.Int),
                 'resolve_context': resolve_context,
                 'resolve_company_ids': cls.resolve_company_ids,
+                'resolve_session_id': cls.resolve_session_id,
             }
             for model_name, query_type in cls.query_types.items():
                 query_params.update(cls._field_params(model_name, query_type))
