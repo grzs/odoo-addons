@@ -53,6 +53,55 @@ class ContextItem(graphene.InputObjectType):
     v = graphene.Field(Oobject, required=True)
 
 
+class OdooSession(graphene.ObjectType):
+    sid = graphene.String(required=True)
+    uid = graphene.Int()
+    login = graphene.String()
+    db = graphene.String()
+    status = graphene.String()
+
+
+class OdooSessionMutation(graphene.Mutation):
+    class Arguments:
+        login = graphene.String()
+        password = graphene.String()
+        logout = graphene.Boolean()
+        db = graphene.String()
+
+    Output = OdooSession
+
+    def mutate(root, info, login=None, password=None, logout=None, db=None):
+        session = http.request.session
+        res = OdooSession()
+        res.sid = session.sid
+        if logout:
+            if session.new:
+                raise UserError(_("Not logged in!"))
+            session.logout()
+            http.root.session_store.delete(session)
+            session.modified = False
+            session.rotate = False
+            res.uid = session['uid']
+            res.login = session['login']
+            res.db = session['db']
+            res.status = "Closed"
+            return res
+        if login and password:
+            if not session.new:
+                raise UserError(_("Already logged in!"))
+            _db = db if db else session['db']
+            res.uid = session.authenticate(_db, login=login, password=password)
+            if not res.uid:
+                raise UserError(_("User not found!"))
+            res.login = login
+            res.db = _db
+            res.status = "Successful login"
+            session.rotate = False
+            return res
+        else:
+            raise UserError(_("Invalid credentials!"))
+
+
 class GraphqlFactory():
     relation_ttypes = [
         'many2one', 'many2one_reference', 'reference',
@@ -275,22 +324,21 @@ class GraphqlFactory():
         return [c.id for c in info.context['env'].companies]
 
     @staticmethod
-    def resolve_session_id(parent, info,
-                           login=None, password=None, logout=False):
+    def resolve_session(parent, info):
         session = http.request.session
-        if not logout and (login and password):
-            db = session['db']
-            session.authenticate(db, login=login, password=password)
-            session.rotate = False
-        elif logout:
-            session.logout()
-            http.root.session_store.delete(session)
+        res = OdooSession()
+        res.sid = session.sid
+        if session.new:
             session.modified = False
-            session.rotate = False
-            return "Session closed"
-        else:
-            session.modified = False
-        return session.sid
+            res.status = "Inactive"
+            return res
+
+        res.sid = session.sid
+        res.uid = session['uid']
+        res.login = session['login']
+        res.db = session['db']
+        res.status = "Active"
+        return res
 
     @classmethod
     def _get_model(cls, env, model_name, **kw):
@@ -397,16 +445,11 @@ class GraphqlFactory():
                     company=graphene.Int(),
                     context=graphene.List(graphene.NonNull(ContextItem)),
                 ),
-                'session_id': graphene.Field(
-                    graphene.String,
-                    login=graphene.String(),
-                    password=graphene.String(),
-                    logout=graphene.Boolean(default_value=False),
-                ),
+                'session': graphene.Field(OdooSession),
                 'company_ids': graphene.List(graphene.Int),
                 'resolve_context': resolve_context,
                 'resolve_company_ids': cls.resolve_company_ids,
-                'resolve_session_id': cls.resolve_session_id,
+                'resolve_session': cls.resolve_session,
             }
             for model_name, query_type in cls.query_types.items():
                 query_params.update(cls._field_params(model_name, query_type))
@@ -421,8 +464,10 @@ class GraphqlFactory():
         subquery_models_writable = f"{subquery_models} AND graphql_write = 't'"
         where_clause = f"WHERE model IN ({subquery_models_writable})"
         mutation_model_fields = cls._query_db_fields(where_clause)
+        mutation_params = {
+            'session': OdooSessionMutation.Field()
+        }
         if len(mutation_model_fields):
-            mutation_params = {}
             for model_name, fields in mutation_model_fields.items():
                 field_name = '_'.join(model_name.split('.'))
                 mutation_type = cls._make_mutation_type(model_name, fields)
@@ -432,9 +477,7 @@ class GraphqlFactory():
                     f'create_{field_name}': mutation_type.Field(),
                     field_name: mutation_update_type.Field(),
                 })
-            return type('MutationORM', (graphene.ObjectType, ), mutation_params)
-        else:
-            return None
+        return type('MutationORM', (graphene.ObjectType, ), mutation_params)
 
     @classmethod
     def make(cls):
