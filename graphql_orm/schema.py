@@ -1,11 +1,7 @@
 # coding: utf-8
 
-# Copyright 2018 ACSONE SA/NV
+# Copyright 2021 Janos Gerzson (grzs)
 # License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl).
-
-# disable undefined variable error, which erroneously triggers
-# on forward declarations of classes in lambdas
-# pylint: disable=E0602
 
 import graphene
 import re
@@ -66,8 +62,136 @@ class ContextItemInput(graphene.InputObjectType):
 
 
 class ContextItem(graphene.ObjectType):
-    k = graphene.String(required=True)
-    v = graphene.Field(Oobject, required=True)
+    k = graphene.String()
+    v = graphene.String()
+    v_object = graphene.Field(Oobject)
+
+
+def _eval_domain(domain):
+    domain_odoo = []
+    if not domain:
+        return domain_odoo
+    for d in domain:
+        value = _eval_oobject(d.v)
+        if value is None:
+            continue
+        criterion = (d.f, d.o, value)
+        if d.logical in ['&', '|', '!']:
+            domain_odoo.append(d.logical)
+        domain_odoo.append(criterion)
+    return domain_odoo
+
+
+def _eval_context(context):
+    context_odoo = {}
+    for c in context:
+        value = _eval_oobject(c.v)
+        if value is not None:
+            context_odoo.update({c.k: value})
+    return context_odoo
+
+
+def _eval_oobject(o):
+    if o.otype is not None:
+        if not o.v:
+            raise UserError(_("'v' is required when 'otype' is given!"))
+        if o.otype == Otype.STR:
+            return o.v
+        elif o.otype == Otype.INT:
+            return int(o.v)
+        elif o.otype == Otype.FLOAT:
+            return float(o.v)
+        elif o.otype == Otype.BOOL:
+            return bool(o.v)
+        elif o.otype == Otype.LAMBDA:
+            pattern = r"^lambda (?P<var>[a-z]):.*(?P=var).*$"
+            if re.match(pattern, o.v):
+                return eval(o.v)
+            else:
+                raise UserError(
+                    _(f"'{o.v}' is not a valid lambda expression!"))
+        elif o.otype == Otype.ORM:
+            match = pattern_orm.match(o.v)
+            if match:
+                model_name = match.group('model')
+                reg = registry()
+                if model_name in reg.keys():
+                    with reg.cursor() as cr:
+                        env = api.Environment(cr, SUPERUSER_ID, {})
+                        recordset = eval(o.v)
+                        cr.rollback()
+                    return recordset
+                else:
+                    raise UserError(_(f"No such model: '{model_name}'"))
+            else:
+                raise UserError(
+                    _(f"'{o.v}' is not a valid ORM expression!"))
+
+    # if otype not set
+    for v in [o.v, o.v_int, o.v_float, o.v_bool,
+              o.v_list_str, o.v_list_int, o.v_list_float]:
+        if v is not None:
+            return v
+    return None
+
+
+def _create_oobject(o):
+    oobject = Oobject()
+    if type(o).__name__ == 'str':
+        oobject.otype = Otype.STR
+        oobject.v = o
+    elif type(o).__name__ == 'int':
+        oobject.otype = Otype.INT
+        oobject.v = str(o)
+        oobject.v_int = o
+    elif type(o).__name__ == 'float':
+        oobject.otype = Otype.FLOAT
+        oobject.v = str(o)
+        oobject.v_float = o
+    elif type(o).__name__ == 'bool':
+        oobject.otype = Otype.BOOL
+        oobject.v = str(o)
+        oobject.v_bool = o
+    elif type(o).__name__ == 'list':
+        if len(o) == 0:
+            return None
+        elif type(o[0]) == 'str':
+            lst = [i for i in o if type(i) == 'str']
+            oobject.otype = Otype.LST_STR
+            oobject.v = str(lst)
+            oobject.v_list_str = lst
+        elif type(o[0]) == 'int':
+            lst = [i for i in o if type(i) == 'int']
+            oobject.otype = Otype.LST_INT
+            oobject.v = str(lst)
+            oobject.v_list_int = lst
+        elif type(o[0]) == 'float':
+            lst = [i for i in o if type(i) == 'float']
+            oobject.otype = Otype.LST_FLOAT
+            oobject.v = str(lst)
+            oobject.v_list_float = lst
+    elif type(o).__name__ == 'function' and o.__name__ == '<lambda>':
+        oobject.otype = Otype.LAMBDA
+        oobject.v = str(o)
+    elif hasattr(o, '_model_classes'):
+        oobject.otype = Otype.ORM
+        ids_str = str(list(o.ids))
+        oobject.v = f"env['{o._name}'].search(['id','in',{ids_str}])"
+    else:
+        return None
+    return oobject
+
+
+def _create_context_list(context):
+    context_list = []
+    for key, value in context.items():
+        item = ContextItem()
+        item.k = key
+        item.v = str(value)
+        item.v_object = _create_oobject(value)
+        if item.v:
+            context_list.append(item)
+    return context_list
 
 
 class OdooSession(graphene.ObjectType):
@@ -85,14 +209,19 @@ class OdooSessionMutation(graphene.Mutation):
         password = graphene.String()
         terminate = graphene.Boolean()
         db = graphene.String()
+        context = graphene.List(ContextItemInput)
 
     Output = OdooSession
 
-    def mutate(root, info, login=None, password=None, terminate=None, db=None):
+    def mutate(root, info,
+               login=None, password=None, terminate=None, db=None, context=None):
         session = http.request.session
         res = OdooSession()
         res.sid = session.sid
         res.uid = session['uid']
+        if context:
+            ctx = _eval_context(context)
+            session['context'].update(ctx)
         if terminate:
             if session.new:
                 raise UserError(_("Session expired!"))
@@ -158,132 +287,6 @@ class GraphqlFactory():
                 model_fields.update({t[0]: []})
             model_fields[t[0]].append(t[1:])
         return model_fields
-
-    @classmethod
-    def _eval_domain(cls, domain):
-        domain_odoo = []
-        if not domain:
-            return domain_odoo
-        for d in domain:
-            value = cls._eval_oobject(d.v)
-            if value is None:
-                continue
-            criterion = (d.f, d.o, value)
-            if d.logical in ['&', '|', '!']:
-                domain_odoo.append(d.logical)
-            domain_odoo.append(criterion)
-        return domain_odoo
-
-    @classmethod
-    def _eval_context(cls, context):
-        context_odoo = {}
-        for c in context:
-            value = cls._eval_oobject(c.v)
-            if value is not None:
-                context_odoo.update({c.k: value})
-        return context_odoo
-
-    @classmethod
-    def _eval_oobject(cls, o):
-        if o.otype is not None:
-            if not o.v:
-                raise UserError(_("'v' is required when 'otype' is given!"))
-            if o.otype == Otype.STR:
-                return o.v
-            elif o.otype == Otype.INT:
-                return int(o.v)
-            elif o.otype == Otype.FLOAT:
-                return float(o.v)
-            elif o.otype == Otype.BOOL:
-                return bool(o.v)
-            elif o.otype == Otype.LAMBDA:
-                pattern = r"^lambda (?P<var>[a-z]):.*(?P=var).*$"
-                if re.match(pattern, o.v):
-                    return eval(o.v)
-                else:
-                    raise UserError(
-                        _(f"'{o.v}' is not a valid lambda expression!"))
-            elif o.otype == Otype.ORM:
-                match = pattern_orm.match(o.v)
-                if match:
-                    model_name = match.group('model')
-                    reg = registry()
-                    if model_name in reg.keys():
-                        with reg.cursor() as cr:
-                            env = api.Environment(cr, SUPERUSER_ID, {})
-                            recordset = eval(o.v)
-                            cr.rollback()
-                        return recordset
-                    else:
-                        raise UserError(_(f"No such model: '{model_name}'"))
-                else:
-                    raise UserError(
-                        _(f"'{o.v}' is not a valid ORM expression!"))
-
-        # if otype not set
-        for v in [o.v, o.v_int, o.v_float, o.v_bool,
-                  o.v_list_str, o.v_list_int, o.v_list_float]:
-            if v is not None:
-                return v
-        return None
-
-    @classmethod
-    def _create_oobject(cls, o):
-        oobject = Oobject()
-        if type(o).__name__ == 'str':
-            oobject.otype = Otype.STR
-            oobject.v = o
-        elif type(o).__name__ == 'int':
-            oobject.otype = Otype.INT
-            oobject.v = str(o)
-            oobject.v_int = o
-        elif type(o).__name__ == 'float':
-            oobject.otype = Otype.FLOAT
-            oobject.v = str(o)
-            oobject.v_float = o
-        elif type(o).__name__ == 'bool':
-            oobject.otype = Otype.BOOL
-            oobject.v = str(o)
-            oobject.v_bool = o
-        elif type(o).__name__ == 'list':
-            if len(o) == 0:
-                return None
-            elif type(o[0]) == 'str':
-                lst = [i for i in o if type(i) == 'str']
-                oobject.otype = Otype.LST_STR
-                oobject.v = str(lst)
-                oobject.v_list_str = lst
-            elif type(o[0]) == 'int':
-                lst = [i for i in o if type(i) == 'int']
-                oobject.otype = Otype.LST_INT
-                oobject.v = str(lst)
-                oobject.v_list_int = lst
-            elif type(o[0]) == 'float':
-                lst = [i for i in o if type(i) == 'float']
-                oobject.otype = Otype.LST_FLOAT
-                oobject.v = str(lst)
-                oobject.v_list_float = lst
-        elif type(o).__name__ == 'function' and o.__name__ == '<lambda>':
-            oobject.otype = Otype.LAMBDA
-            oobject.v = str(o)
-        elif hasattr(o, '_model_classes'):
-            oobject.otype = Otype.ORM
-            ids_str = str(list(o.ids))
-            oobject.v = f"env['{o._name}'].search(['id','in',{ids_str}])"
-        else:
-            return None
-        return oobject
-
-    @classmethod
-    def _create_context_list(cls, context):
-        context_list = []
-        for key, value in context.items():
-            item = ContextItem()
-            item.k = key
-            item.v = cls._create_oobject(value)
-            if item.v:
-                context_list.append(item)
-        return context_list
 
     # factory methods
     @classmethod
@@ -401,14 +404,25 @@ class GraphqlFactory():
         return [c.id for c in info.context['env'].companies]
 
     @staticmethod
+    def resolve_context(parent, info, **kw):
+        env = info.context['env']
+        context = env.context.copy()
+        if kw.get('apikey'):
+            user_id = env['res.users.apikeys']._check_credentials(
+                scope='graphql', key=kw['apikey'])
+            context.update({'uid': user_id})
+        if kw.get('context'):
+            context.update(_eval_context(kw['context']))
+        return _create_context_list(context)
+
+    @staticmethod
     def resolve_session(parent, info):
-        cls = GraphqlFactory
         session = http.request.session
         res = OdooSession()
         res.sid = session.sid
         res.uid = session['uid']
         res.login = session['login']
-        res.context = cls._create_context_list(session['context'])
+        res.context = _create_context_list(session['context'])
         if res.login:
             res.status = "Authenticated"
         else:
@@ -436,7 +450,7 @@ class GraphqlFactory():
         if kw.get('company'):
             model = model.with_company(kw.pop('company'))
         if kw.get('context'):
-            context.update(cls._eval_context(kw.pop('context')))
+            context.update(_eval_context(kw.pop('context')))
 
         return model.with_context(context)
 
@@ -449,7 +463,7 @@ class GraphqlFactory():
             if kw.get('ids'):
                 return model.browse(kw['ids'])
             else:
-                domain = cls._eval_domain(kw.get('domain'))
+                domain = _eval_domain(kw.get('domain'))
                 limit = kw.get('limit')
                 offset = kw.get('offset')
                 return model.search(domain, limit=limit, offset=offset)
@@ -477,19 +491,6 @@ class GraphqlFactory():
         subquery_models = "SELECT model FROM ir_model WHERE graphql = 't'"
         where_clause = f"WHERE model IN ({subquery_models})"
         query_model_fields = cls._query_db_fields(where_clause)
-
-        # resolvers
-        @staticmethod
-        def resolve_context(parent, info, **kw):
-            env = info.context['env']
-            context = env.context.copy()
-            if kw.get('apikey'):
-                user_id = env['res.users.apikeys']._check_credentials(
-                    scope='graphql', key=kw['apikey'])
-                context.update({'uid': user_id})
-            if kw.get('context'):
-                context.update(cls._eval_context(kw['context']))
-            return cls._create_context_list(context)
 
         if len(query_model_fields):
             # make types
@@ -527,7 +528,7 @@ class GraphqlFactory():
                 ),
                 'session': graphene.Field(OdooSession),
                 'company_ids': graphene.List(graphene.Int),
-                'resolve_context': resolve_context,
+                'resolve_context': cls.resolve_context,
                 'resolve_company_ids': cls.resolve_company_ids,
                 'resolve_session': cls.resolve_session,
             }
