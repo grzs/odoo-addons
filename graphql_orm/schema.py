@@ -426,7 +426,7 @@ class GraphqlFactory():
         if res.login:
             res.status = "Authenticated"
         else:
-            res.status = "Anonymus"
+            res.status = "anonymus"
         if session.new:
             return res
 
@@ -434,6 +434,7 @@ class GraphqlFactory():
         session.modified = False
         return res
 
+    # producer helper methods
     @classmethod
     def _get_model(cls, env, model_name, **kw):
         try:
