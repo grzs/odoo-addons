@@ -65,23 +65,24 @@ class OdooSessionMutation(graphene.Mutation):
     class Arguments:
         login = graphene.String()
         password = graphene.String()
-        logout = graphene.Boolean()
+        terminate = graphene.Boolean()
         db = graphene.String()
 
     Output = OdooSession
 
-    def mutate(root, info, login=None, password=None, logout=None, db=None):
+    def mutate(root, info, login=None, password=None, terminate=None, db=None):
         session = http.request.session
         res = OdooSession()
         res.sid = session.sid
-        if logout:
+        res.uid = session['uid']
+        if terminate:
             if session.new:
-                raise UserError(_("Not logged in!"))
-            session.logout()
+                raise UserError(_("Session expired!"))
+            if res.uid:
+                session.logout()
             http.root.session_store.delete(session)
             session.modified = False
             session.rotate = False
-            res.uid = session['uid']
             res.login = session['login']
             res.db = session['db']
             res.status = "Closed"
@@ -328,16 +329,17 @@ class GraphqlFactory():
         session = http.request.session
         res = OdooSession()
         res.sid = session.sid
-        if session.new:
-            session.modified = False
-            res.status = "Inactive"
-            return res
-
-        res.sid = session.sid
         res.uid = session['uid']
         res.login = session['login']
+        if res.login:
+            res.status = "Authenticated"
+        else:
+            res.status = "Anonymus"
+        if session.new:
+            return res
+
         res.db = session['db']
-        res.status = "Active"
+        session.modified = False
         return res
 
     @classmethod
