@@ -18,6 +18,7 @@ from odoo.addons.graphql_base import OdooObjectType
 
 from .odoo_orm_regex import p as pattern_orm
 
+
 class Otype(graphene.Enum):
     STR = 1
     INT = 2
@@ -30,7 +31,7 @@ class Otype(graphene.Enum):
     ORM = 9
 
 
-class Oobject(graphene.InputObjectType):
+class OobjectInput(graphene.InputObjectType):
     otype = graphene.Field(Otype)
     v = graphene.String()
     v_int = graphene.Int()
@@ -41,14 +42,30 @@ class Oobject(graphene.InputObjectType):
     v_list_float = graphene.List(graphene.Float)
 
 
-class DomainItem(graphene.InputObjectType):
+class Oobject(graphene.ObjectType):
+    otype = graphene.Field(Otype)
+    v = graphene.String()
+    v_int = graphene.Int()
+    v_float = graphene.Float()
+    v_bool = graphene.Boolean()
+    v_list_str = graphene.List(graphene.String)
+    v_list_int = graphene.List(graphene.Int)
+    v_list_float = graphene.List(graphene.Float)
+
+
+class DomainItemInput(graphene.InputObjectType):
     logical = graphene.String()
     f = graphene.String(required=True)
     o = graphene.String(required=True)
-    v = graphene.Field(Oobject, required=True)
+    v = graphene.Field(OobjectInput, required=True)
 
 
-class ContextItem(graphene.InputObjectType):
+class ContextItemInput(graphene.InputObjectType):
+    k = graphene.String(required=True)
+    v = graphene.Field(OobjectInput, required=True)
+
+
+class ContextItem(graphene.ObjectType):
     k = graphene.String(required=True)
     v = graphene.Field(Oobject, required=True)
 
@@ -133,7 +150,7 @@ class GraphqlFactory():
                 return {}
             else:
                 raise e
-        
+
         model_fields = {}
         for t in field_tuples:
             if t[0] not in model_fields.keys():
@@ -209,6 +226,64 @@ class GraphqlFactory():
                 return v
         return None
 
+    @classmethod
+    def _create_oobject(cls, o):
+        oobject = Oobject()
+        if type(o).__name__ == 'str':
+            oobject.otype = Otype.STR
+            oobject.v = o
+        elif type(o).__name__ == 'int':
+            oobject.otype = Otype.INT
+            oobject.v = str(o)
+            oobject.v_int = o
+        elif type(o).__name__ == 'float':
+            oobject.otype = Otype.FLOAT
+            oobject.v = str(o)
+            oobject.v_float = o
+        elif type(o).__name__ == 'bool':
+            oobject.otype = Otype.BOOL
+            oobject.v = str(o)
+            oobject.v_bool = o
+        elif type(o).__name__ == 'list':
+            if len(o) == 0:
+                return None
+            elif type(o[0]) == 'str':
+                lst = [i for i in o if type(i) == 'str']
+                oobject.otype = Otype.LST_STR
+                oobject.v = str(lst)
+                oobject.v_list_str = lst
+            elif type(o[0]) == 'int':
+                lst = [i for i in o if type(i) == 'int']
+                oobject.otype = Otype.LST_INT
+                oobject.v = str(lst)
+                oobject.v_list_int = lst
+            elif type(o[0]) == 'float':
+                lst = [i for i in o if type(i) == 'float']
+                oobject.otype = Otype.LST_FLOAT
+                oobject.v = str(lst)
+                oobject.v_list_float = lst
+        elif type(o).__name__ == 'function' and o.__name__ == '<lambda>':
+            oobject.otype = Otype.LAMBDA
+            oobject.v = str(o)
+        elif hasattr(o, '_model_classes'):
+            oobject.otype = Otype.ORM
+            ids_str = str(list(o.ids))
+            oobject.v = f"env['{o._name}'].search(['id','in',{ids_str}])"
+        else:
+            return None
+        return oobject
+
+    @classmethod
+    def _create_context_list(cls, context):
+        context_list = []
+        for key, value in context.items():
+            item = ContextItem()
+            item.k = key
+            item.v = cls._create_oobject(value)
+            if item.v:
+                context_list.append(item)
+        return context_list
+
     # factory methods
     @classmethod
     def _make_field_type(cls, odoo_type, required=False):
@@ -277,7 +352,7 @@ class GraphqlFactory():
         class Arguments:
             apikey = graphene.String()
             company = graphene.Int()
-            context = graphene.List(graphene.NonNull(ContextItem))
+            context = graphene.List(graphene.NonNull(ContextItemInput))
             id = graphene.ID(required=update)
 
         if update:
@@ -384,9 +459,9 @@ class GraphqlFactory():
                 required=True,
                 apikey=graphene.String(),
                 company=graphene.Int(),
-                context=graphene.List(graphene.NonNull(ContextItem)),
+                context=graphene.List(graphene.NonNull(ContextItemInput)),
                 ids=graphene.List(graphene.Int),
-                domain=graphene.List(graphene.NonNull(DomainItem)),
+                domain=graphene.List(graphene.NonNull(DomainItemInput)),
                 limit=graphene.Int(),
                 offset=graphene.Int(),
             ),
@@ -411,7 +486,7 @@ class GraphqlFactory():
                 context.update({'uid': user_id})
             if kw.get('context'):
                 context.update(cls._eval_context(kw['context']))
-            return str(context)
+            return cls._create_context_list(context)
 
         if len(query_model_fields):
             # make types
@@ -441,11 +516,11 @@ class GraphqlFactory():
                     cls.query_types[model_name].__init_subclass__()
 
             query_params = {
-                'context': graphene.Field(
-                    graphene.String,
+                'context': graphene.List(
+                    ContextItem,
                     apikey=graphene.String(),
                     company=graphene.Int(),
-                    context=graphene.List(graphene.NonNull(ContextItem)),
+                    context=graphene.List(graphene.NonNull(ContextItemInput)),
                 ),
                 'session': graphene.Field(OdooSession),
                 'company_ids': graphene.List(graphene.Int),
