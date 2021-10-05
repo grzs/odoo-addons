@@ -75,6 +75,7 @@ class OdooSession(graphene.ObjectType):
     uid = graphene.Int()
     login = graphene.String()
     db = graphene.String()
+    context = graphene.List(ContextItem)
     status = graphene.String()
 
 
@@ -401,11 +402,13 @@ class GraphqlFactory():
 
     @staticmethod
     def resolve_session(parent, info):
+        cls = GraphqlFactory
         session = http.request.session
         res = OdooSession()
         res.sid = session.sid
         res.uid = session['uid']
         res.login = session['login']
+        res.context = cls._create_context_list(session['context'])
         if res.login:
             res.status = "Authenticated"
         else:
