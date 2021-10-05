@@ -85,7 +85,7 @@ class OdooSessionMutation(graphene.Mutation):
             session.rotate = False
             res.login = session['login']
             res.db = session['db']
-            res.status = "Closed"
+            res.status = "Terminated"
             return res
         if login and password:
             if not session.new:
