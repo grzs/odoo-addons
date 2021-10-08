@@ -1,5 +1,5 @@
-import {
-  OdooType,
+import { OdooType } from "./types";
+import type {
   OdooObject,
   OdooDomainItem,
   OdooContext,

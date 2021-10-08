@@ -1,4 +1,4 @@
-import { OdooType, } from "./types";
+import { OdooType } from "./types";
 // type guard functions
 function isOdooObject(obj) {
     return (obj.otype !== undefined &&
