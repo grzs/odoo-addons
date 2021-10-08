@@ -3,8 +3,9 @@
 # Copyright 2021 Janos Gerzson (grzs)
 # License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl).
 
-import graphene
+from types import LambdaType
 import re
+import graphene
 
 from psycopg2 import ProgrammingError
 
@@ -28,7 +29,8 @@ class Otype(graphene.Enum):
 
 
 class OobjectInput(graphene.InputObjectType):
-    otype = graphene.Field(Otype)
+    k = graphene.String()  # optional key
+    otype = graphene.Field(Otype, default_value=Otype.STR)
     v = graphene.String()
     v_int = graphene.Int()
     v_float = graphene.Float()
@@ -39,6 +41,7 @@ class OobjectInput(graphene.InputObjectType):
 
 
 class Oobject(graphene.ObjectType):
+    k = graphene.String()
     otype = graphene.Field(Otype)
     v = graphene.String()
     v_int = graphene.Int()
@@ -54,17 +57,6 @@ class DomainItemInput(graphene.InputObjectType):
     f = graphene.String(required=True)
     o = graphene.String(required=True)
     v = graphene.Field(OobjectInput, required=True)
-
-
-class ContextItemInput(graphene.InputObjectType):
-    k = graphene.String(required=True)
-    v = graphene.Field(OobjectInput, required=True)
-
-
-class ContextItem(graphene.ObjectType):
-    k = graphene.String()
-    v = graphene.String()
-    v_object = graphene.Field(Oobject)
 
 
 def _eval_domain(domain):
@@ -84,17 +76,17 @@ def _eval_domain(domain):
 
 def _eval_context(context):
     context_odoo = {}
-    for c in context:
-        value = _eval_oobject(c.v)
+    for o in context:
+        if not o.k:
+            continue
+        value = _eval_oobject(o)
         if value is not None:
-            context_odoo.update({c.k: value})
+            context_odoo.update({o.k: value})
     return context_odoo
 
 
 def _eval_oobject(o):
-    if o.otype is not None:
-        if not o.v:
-            raise UserError(_("'v' is required when 'otype' is given!"))
+    if o.v is not None:
         if o.otype == Otype.STR:
             return o.v
         elif o.otype == Otype.INT:
@@ -127,7 +119,7 @@ def _eval_oobject(o):
                 raise UserError(
                     _(f"'{o.v}' is not a valid ORM expression!"))
 
-    # if otype not set
+    # if o.v not set
     for v in [o.v, o.v_int, o.v_float, o.v_bool,
               o.v_list_str, o.v_list_int, o.v_list_float]:
         if v is not None:
@@ -135,42 +127,45 @@ def _eval_oobject(o):
     return None
 
 
-def _create_oobject(o):
+def _create_oobject(o, key=None):
     oobject = Oobject()
-    if type(o).__name__ == 'str':
+    if isinstance(key, str):
+        oobject.k = key
+
+    if isinstance(o, str):
         oobject.otype = Otype.STR
         oobject.v = o
-    elif type(o).__name__ == 'int':
+    elif isinstance(o, int):
         oobject.otype = Otype.INT
         oobject.v = str(o)
         oobject.v_int = o
-    elif type(o).__name__ == 'float':
+    elif isinstance(o, float):
         oobject.otype = Otype.FLOAT
         oobject.v = str(o)
         oobject.v_float = o
-    elif type(o).__name__ == 'bool':
+    elif isinstance(o, bool):
         oobject.otype = Otype.BOOL
         oobject.v = str(o)
         oobject.v_bool = o
-    elif type(o).__name__ == 'list':
+    elif isinstance(o, list):
         if len(o) == 0:
             return None
-        elif type(o[0]) == 'str':
-            lst = [i for i in o if type(i) == 'str']
+        elif isinstance(o[0], str):
+            lst = [i for i in o if isinstance(i, str)]
             oobject.otype = Otype.LST_STR
             oobject.v = str(lst)
             oobject.v_list_str = lst
-        elif type(o[0]) == 'int':
-            lst = [i for i in o if type(i) == 'int']
+        elif isinstance(o[0], int):
+            lst = [i for i in o if isinstance(i, int)]
             oobject.otype = Otype.LST_INT
             oobject.v = str(lst)
             oobject.v_list_int = lst
-        elif type(o[0]) == 'float':
-            lst = [i for i in o if type(i) == 'float']
+        elif isinstance(o[0], float):
+            lst = [i for i in o if isinstance(i, float)]
             oobject.otype = Otype.LST_FLOAT
             oobject.v = str(lst)
             oobject.v_list_float = lst
-    elif type(o).__name__ == 'function' and o.__name__ == '<lambda>':
+    elif isinstance(o, LambdaType):
         oobject.otype = Otype.LAMBDA
         oobject.v = str(o)
     elif hasattr(o, '_model_classes'):
@@ -185,10 +180,7 @@ def _create_oobject(o):
 def _create_context_list(context):
     context_list = []
     for key, value in context.items():
-        item = ContextItem()
-        item.k = key
-        item.v = str(value)
-        item.v_object = _create_oobject(value)
+        item = _create_oobject(value, key=key)
         if item.v:
             context_list.append(item)
     return context_list
@@ -199,7 +191,7 @@ class OdooSession(graphene.ObjectType):
     uid = graphene.Int()
     login = graphene.String()
     db = graphene.String()
-    context = graphene.List(ContextItem)
+    context = graphene.List(Oobject)
     status = graphene.String()
 
 
@@ -209,7 +201,7 @@ class OdooSessionMutation(graphene.Mutation):
         password = graphene.String()
         terminate = graphene.Boolean()
         db = graphene.String()
-        context = graphene.List(ContextItemInput)
+        context = graphene.List(OobjectInput)
 
     Output = OdooSession
 
@@ -358,7 +350,7 @@ class GraphqlFactory():
         class Arguments:
             apikey = graphene.String()
             company = graphene.Int()
-            context = graphene.List(graphene.NonNull(ContextItemInput))
+            context = graphene.List(graphene.NonNull(OobjectInput))
             id = graphene.ID(required=update)
 
         if update:
@@ -479,7 +471,7 @@ class GraphqlFactory():
                 required=True,
                 apikey=graphene.String(),
                 company=graphene.Int(),
-                context=graphene.List(graphene.NonNull(ContextItemInput)),
+                context=graphene.List(graphene.NonNull(OobjectInput)),
                 ids=graphene.List(graphene.Int),
                 domain=graphene.List(graphene.NonNull(DomainItemInput)),
                 limit=graphene.Int(),
@@ -495,52 +487,52 @@ class GraphqlFactory():
         where_clause = f"WHERE model IN ({subquery_models})"
         query_model_fields = cls._query_db_fields(where_clause)
 
-        if len(query_model_fields):
-            # make types
-            for model_name, fields in query_model_fields.items():
-                cls.query_types.update({
-                    model_name: cls._make_query_type(model_name, fields)
-                })
-
-            # make relations
-            for model_name, fields in query_model_fields.items():
-                type_updated = False
-                for t in fields:
-                    f_name, f_ttype, f_relation, f_required = t
-                    if f_ttype not in cls.relation_ttypes:
-                        continue
-
-                    if f_relation and f_relation in cls.query_types.keys():
-                        field_type = cls._make_relation_field_type(f_ttype, f_relation)
-                    else:
-                        field_type = cls._make_field_type(f_ttype)
-                    setattr(cls.query_types[model_name], f_name, field_type)
-                    type_updated = True
-
-                # reinit type
-                if type_updated:
-                    delattr(cls.query_types[model_name], '_meta')
-                    cls.query_types[model_name].__init_subclass__()
-
-            query_params = {
-                'context': graphene.List(
-                    ContextItem,
-                    apikey=graphene.String(),
-                    company=graphene.Int(),
-                    context=graphene.List(graphene.NonNull(ContextItemInput)),
-                ),
-                'session': graphene.Field(OdooSession),
-                'company_ids': graphene.List(graphene.Int),
-                'resolve_context': cls.resolve_context,
-                'resolve_company_ids': cls.resolve_company_ids,
-                'resolve_session': cls.resolve_session,
-            }
-            for model_name, query_type in cls.query_types.items():
-                query_params.update(cls._field_params(model_name, query_type))
-
-            return type('QueryORM', (graphene.ObjectType, ), query_params)
-        else:
+        if len(query_model_fields) == 0:
             return None
+
+        # make types
+        for model_name, fields in query_model_fields.items():
+            cls.query_types.update({
+                model_name: cls._make_query_type(model_name, fields)
+            })
+
+        # make relations
+        for model_name, fields in query_model_fields.items():
+            type_updated = False
+            for t in fields:
+                f_name, f_ttype, f_relation, f_required = t
+                if f_ttype not in cls.relation_ttypes:
+                    continue
+
+                if f_relation and f_relation in cls.query_types.keys():
+                    field_type = cls._make_relation_field_type(f_ttype, f_relation)
+                else:
+                    field_type = cls._make_field_type(f_ttype)
+                setattr(cls.query_types[model_name], f_name, field_type)
+                type_updated = True
+
+            # reinit type
+            if type_updated:
+                delattr(cls.query_types[model_name], '_meta')
+                cls.query_types[model_name].__init_subclass__()
+
+        query_params = {
+            'context': graphene.List(
+                Oobject,
+                apikey=graphene.String(),
+                company=graphene.Int(),
+                context=graphene.List(graphene.NonNull(OobjectInput)),
+            ),
+            'session': graphene.Field(OdooSession),
+            'company_ids': graphene.List(graphene.Int),
+            'resolve_context': cls.resolve_context,
+            'resolve_company_ids': cls.resolve_company_ids,
+            'resolve_session': cls.resolve_session,
+        }
+        for model_name, query_type in cls.query_types.items():
+            query_params.update(cls._field_params(model_name, query_type))
+
+        return type('QueryORM', (graphene.ObjectType, ), query_params)
 
     @classmethod
     def _make_mutation(cls):
