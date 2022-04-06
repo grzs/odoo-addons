@@ -1,0 +1,104 @@
+<odoo>
+
+    <template id="assets" inherit_id="web.assets_frontend">
+        <xpath expr="//script[last()]" position="after">
+            <script type="text/javascript" src="/module_stats/static/src/js/stats.js"/>
+        </xpath>
+        <xpath expr="//link[last()]" position="after">
+            <link rel="stylesheet" type="text/scss"
+                  href="/module_stats/static/src/scss/style.scss"/>
+        </xpath>
+    </template>
+
+    <template id="layout" inherit_id="portal.frontend_layout" primary="True">
+        <xpath expr="//header" position="replace"/>
+        <xpath expr="//footer" position="attributes">
+            <attribute name="t-att-class"/>
+            <attribute name="class">d-none</attribute>
+        </xpath>
+    </template>
+
+    <template id="stats">
+        <t t-set="title">Module Stats</t>
+        <t t-set="head">
+            <meta name="author" content="grzs"/>
+            <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+        </t>
+        <t t-call="module_stats.layout">
+            <div id="spinner" class="fixed-top h-100 w-100 align-items-center d-none"
+                 style="background-color: rgba(0, 0, 0, 0.1);">
+                <div class="col-12 text-center text-primary">
+                    <i class="fa fa-spinner fa-fw fa-2x fa-spin"
+                       style="--fa-animation-duration: 3s"/>
+                </div>
+            </div>
+            <h1 id="top" class="text-center m-2">Odoo Module Statistics</h1>
+            <a role="button" class="position-fixed btn btn-secondary m-3"
+               style="bottom: 0; right: 0;" href="#top">
+                <i class="fa fa-chevron-up"/>
+            </a>
+            <div class="container">
+                <form action="#" id="ModStatsForm">
+                    <div class="form-group">
+                        <label for="inputPath">App path regex</label>
+                        <input type="text" class="form-control" id="inputPath"
+                               placeholder="path/to/my_odoo_module" required=""/>
+                        <div class="invalid-feedback text-danger">
+                            Couldn't find any module!
+                        </div>
+                    </div>
+                    <label>Fields to fetch</label>
+                    <div class="form-group">
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input"
+                                   id="checkModels" name="models" disabled=""/>
+                            <label class="form-check-label"
+                                   for="checkModels">Models</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input"
+                                   id="checkFields" name="fields" disabled=""/>
+                            <label class="form-check-label"
+                                   for="checkFields">Fields</label>
+                        </div>
+                    </div>
+                    <label>Fields to show</label>
+                    <div id="toShowChecks" class="form-group">
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input"
+                                   id="checkDeps" name="dependencies"/>
+                            <label class="form-check-label"
+                                   for="checkDeps">Dependencies</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input"
+                                   id="checkMenus" name="menus"/>
+                            <label class="form-check-label"
+                                   for="checkMenus">Menus</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input"
+                                   id="checkReports" name="reports"/>
+                            <label class="form-check-label"
+                                   for="checkReports">Reports</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input"
+                                   id="checkReports" name="views"/>
+                            <label class="form-check-label"
+                                   for="checkViews">Views</label>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary"
+                            id="btnFetch">Fetch</button>
+                    <button type="button" class="btn btn-secondary"
+                            id="btnRedraw" disabled="">Redraw</button>
+                    <button type="button" id="btnDownload"
+                            class="btn btn-success d-none">Download XLSX</button>
+                </form>
+                <hr/>
+            </div>
+        </t>
+    </template>
+
+</odoo>

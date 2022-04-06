@@ -1,0 +1,46 @@
+$trans-duration: 1s;
+
+.o_connected_user #globalStats {
+    top: -4rem;
+    transition: top $trans-duration;
+    &.opened {
+        top: 46px;
+    }
+}
+
+#globalStats {
+    top: -7rem;
+    transition: top $trans-duration;
+    &.opened {
+        top: 0;
+    }
+
+    button {
+        width: 145px;
+        transition: width $trans-duration;
+        &.opened {
+            width: 100%;
+        }
+        div {
+            overflow: hidden;
+            height: 20px;
+            transition: height $trans-duration;
+            &.opened {
+                height: 0;
+            }
+        }
+        i {
+            transform: rotate(0);
+            transition: transform $trans-duration;
+            &.opened {
+                transform: rotate(180deg);
+            }
+        }
+    }
+}
+
+#ModStatsLists {
+    .btn-list-toggle:hover {
+        cursor: pointer;
+    }
+}

@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<templates>
+
+    <t t-name="module_stats.stats_div">
+        <div id="ModStats">
+            <div id="globalStats" class="fixed-top transitive">
+                <table class="table my-0 bg-white text-center">
+                    <thead>
+                        <tr>
+                            <th t-foreach="stats" t-as="key" t-esc="key"/>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td t-foreach="stats" t-as="key">
+                                <span class="badge badge-primary badge-pill mx-auto"
+                                      t-esc="stats[key]"/>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <button id="toggleGlobals" class="btn btn-warning transitive">
+                    <div class="transitive">global stats</div>
+                    <i class="fa fa-chevron-down transitive"/>
+                </button>
+            </div>
+            <h3>Search results for '<t t-esc="pattern"/>'</h3>
+        </div>
+    </t>
+
+    <t t-name="module_stats.list_group">
+        <div id="ModStatsLists">
+            <div t-foreach="modules" t-as="name" class="mt-2">
+                <div class="row p-3 bg-info mx-0 btn-list-toggle collapsed"
+                     data-toggle="collapse"
+                     t-attf-data-target="{{ '#' + name }}_list_group">
+                    <div class="col-4 px-1"
+                         t-esc="name"/>
+                    <div class="col text-truncate"
+                         t-esc="modules[name].path.slice(0, -1 * name.length)"/>
+                </div>
+                <div t-attf-id="{{ name }}_list_group" class="row collapsee collapse">
+                    <div class="col-4">
+                        <div t-attf-id="{{ name }}_label"
+                             class="list-group" role="tablist">
+                            <a t-foreach="fields" t-as="field"
+                               t-if="field != 'fields'"
+                               class="list-group-item list-group-item-action"
+                               data-toggle="list" role="tab"
+                               t-att-data-module-name="name"
+                               t-attf-href="{{ '#' + name }}_{{ field }}">
+                                <span t-esc="field"/>
+                                <span class="badge badge-primary badge-pill float-right"
+                                      t-esc="counts[name][field]"/>
+                            </a>
+                        </div>
+                    </div>
+                    <div t-attf-id="{{ name }}_content" class="col-8">
+                        <div class="tab-content">
+                            <div t-foreach="fields" t-as="field"
+                                 t-if="field != 'fields'"
+                                 class="tab-pane" role="tabpanel"
+                                 t-attf-id="{{ name }}_{{ field }}">
+                                <t t-if="field == 'dependencies'">
+                                    <t t-set="list" t-value="modules[name][field]"/>
+                                    <div t-if="list.length gt 0" class="mt-2">
+                                        <t t-call="module_stats.list"/>
+                                    </div>
+                                </t>
+                                <t t-else="">
+                                    <t t-set="records" t-value="modules[name][field]"/>
+                                    <t t-if="_.size(records) gt 0">
+                                        <t t-if="field == 'models'"
+                                           t-call="module_stats.models"/>
+                                        <t t-else="" t-call="module_stats.records"/>
+                                    </t>
+                                </t>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+
+    <t t-name="module_stats.list">
+        <ul t-if="list.length > 1" class="pl-3">
+            <li t-foreach="list" t-as="item" t-esc="item"/>
+        </ul>
+        <span t-if="list.length == 1" t-esc="list[0]"/>
+    </t>
+
+    <t t-name="module_stats.records">
+        <table class="table">
+            <thead class="thead-light">
+                <tr>
+                    <th class="text-center">Ext</th>
+                    <th>Name</th>
+                    <th class="text-center">Type</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr t-foreach="records" t-as="item">
+                    <td class="text-center">
+                        <i t-if="item.is_extended" class="fa fa-check text-success"/>
+                    </td>
+                    <td t-esc="item.name"/>
+                    <td class="text-center" t-esc="item.type"/>
+                </tr>
+            </tbody>
+        </table>
+    </t>
+
+    <t t-name="module_stats.models">
+        <table class="table">
+            <thead class="thead-light">
+                <tr>
+                    <th class="text-center">Ext</th>
+                    <th>Name</th>
+                    <th>Classname</th>
+                    <th>Inherits</th>
+                    <th t-if="_.contains(fields, 'fields')">Fields</th>
+                    <th>Records</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr t-foreach="records" t-as="name">
+                    <td class="text-center">
+                        <i t-if="records[name].is_extended"
+                           class="fa fa-check text-success"/>
+                    </td>
+                    <td t-esc="name"/>
+                    <td t-esc="records[name].classname"/>
+                    <td>
+                        <t t-set="list" t-value="records[name].inherits"/>
+                        <t t-call="module_stats.list"/>
+                    </td>
+                    <td t-if="_.contains(fields, 'fields')">
+                        <t t-set="list" t-value="records[name].fields"/>
+                        <t t-call="module_stats.list"/>
+                    </td>
+                    <td class="text-right" t-esc="records[name].records"/>
+                </tr>
+            </tbody>
+        </table>
+    </t>
+
+</templates>
