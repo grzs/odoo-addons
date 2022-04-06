@@ -214,9 +214,10 @@ class OdooSessionMutation(graphene.Mutation):
         res.db = db if db else session['db']
         res.login = session['login']
         if res.login:
-            res.status = "Authenticated"
+            res.status = "authenticated"
         else:
             res.status = "anonymus"
+            session.modified = True
         if context:
             ctx = _eval_context(context)
             session['context'].update(ctx)
@@ -230,15 +231,15 @@ class OdooSessionMutation(graphene.Mutation):
                 session.logout()
             http.root.session_store.delete(session)
             session.modified = False
-            res.status = "Terminated"
+            res.status = "terminated"
         elif login and password:
-            if not session.new:
+            if res.status == "authenticated":
                 raise UserError(_("Already logged in!"))
             res.uid = session.authenticate(res.db, login=login, password=password)
             if not res.uid:
                 raise UserError(_("Invalid credentials!"))
             res.login = login
-            res.status = "Successful login"
+            res.status = "authenticated"
 
         session.rotate = False
         return res
@@ -418,11 +419,11 @@ class GraphqlFactory():
         res.login = session['login']
         res.context = _create_context_list(session['context'])
         if res.login:
-            res.status = "Authenticated"
+            res.status = "authenticated"
         else:
             res.status = "anonymus"
-        if session.new:
-            return res
+        # if session.new:
+        #     return res
 
         res.db = session['db']
         session.modified = False
