@@ -32,10 +32,20 @@ interface OdooDomainItem {
 type OdooContext = OdooObject[];
 type OdooDomain = OdooDomainItem[];
 
+interface OdooSession {
+  sid: string;
+  status: string;
+  uid?: number;
+  login?: string;
+  db?: string;
+  context?: OdooContext;
+}
+
 export {
   OdooType,
   OdooObject,
   OdooDomainItem,
   OdooContext,
   OdooDomain,
+  OdooSession,
 }
