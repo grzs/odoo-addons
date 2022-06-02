@@ -3,7 +3,7 @@
 
 {
     "name": "GraphQL ORM",
-    "version": "14.0.1.0.0",
+    "version": "15.0.1.0.0",
     "license": "LGPL-3",
     "author": "grzs",
     "website": "https://github.com/grzs/odoo-addons/14.0/graphql_orm",
