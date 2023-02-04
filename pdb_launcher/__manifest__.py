@@ -11,10 +11,10 @@
     module, only a relative file path and a line number need to be added.""",
 
     'author': "János Gerzson (@grzs)",
-    'website': "https://github.com/grzs/odoo-addons/tree/14.0/pdb_launcher",
+    'website': "https://github.com/grzs/odoo-addons/tree/16.0/pdb_launcher",
     'license': 'LGPL-3',
     'category': 'Technical',
-    'version': '0.5',
+    'version': '16.0.1b',
     'depends': ['base'],
     'data': [
         'security/ir.model.access.csv',

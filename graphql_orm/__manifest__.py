@@ -3,10 +3,10 @@
 
 {
     "name": "GraphQL ORM",
-    "version": "15.0.1.0.0",
+    "version": "16.0.1.0.0",
     "license": "LGPL-3",
     "author": "grzs",
-    "website": "https://github.com/grzs/odoo-addons/14.0/graphql_orm",
+    "website": "https://github.com/grzs/odoo-addons/16.0/graphql_orm",
     "depends": ["graphql_base"],
     "external_dependencies": {"python": ["graphene"]},
     "development_status": "Beta",
