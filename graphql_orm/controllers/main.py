@@ -13,11 +13,11 @@ class GraphQLController(http.Controller, GraphQLControllerMixin):
     # The GraphiQL route, providing an IDE for developers
     @http.route("/graphiql/orm", auth="public")
     def graphiql(self, **kwargs):
-        return self._handle_graphiql_request(schema)
+        return self._handle_graphiql_request(schema.graphql_schema)
 
     # The graphql route, for applications.
     # Note csrf=False: you may want to apply extra security
     # (such as origin restrictions) to this route.
     @http.route("/graphql/orm", auth="public", csrf=False)
     def graphql(self, **kwargs):
-        return self._handle_graphql_request(schema)
+        return self._handle_graphql_request(schema.graphql_schema)
